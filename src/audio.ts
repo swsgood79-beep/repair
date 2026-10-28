@@ -89,3 +89,23 @@ export function stopSound() {
   window.clearInterval(melodyTimer); window.clearTimeout(tickTimer); window.clearInterval(crackleTimer);
   void ctx?.close(); ctx = null; gains = {};
 }
+
+/** 짧은 효과음 */
+export function sfx(kind: 'click' | 'coin' | 'bad' | 'beep' | 'pop' | 'zap' | 'good', level = 1) {
+  if (!ctx) return;
+  const ac = ctx;
+  const o = ac.createOscillator(), e = ac.createGain();
+  const now = ac.currentTime;
+  const spec: Record<string, [OscillatorType, number, number, number]> = {
+    click: ['square', 900, 600, 0.05], coin: ['triangle', 988, 1319, 0.25], bad: ['sawtooth', 220, 110, 0.3],
+    beep: ['sine', 1000, 1000, 0.4], pop: ['square', 300, 900, 0.08], zap: ['sawtooth', 1600, 80, 0.25], good: ['triangle', 660, 990, 0.3],
+  };
+  const [type, f0, f1, dur] = spec[kind];
+  o.type = type;
+  o.frequency.setValueAtTime(f0, now);
+  o.frequency.exponentialRampToValueAtTime(f1, now + dur);
+  e.gain.setValueAtTime(0.18 * level, now);
+  e.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  o.connect(e).connect(ac.destination);
+  o.start(now); o.stop(now + dur + 0.02);
+}

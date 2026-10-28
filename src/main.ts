@@ -1,4 +1,4 @@
 import './style.css';
-import { boot } from './ui';
+import { start } from './ui/app';
 
-boot(document.getElementById('app')!);
+start(document.getElementById('app')!);

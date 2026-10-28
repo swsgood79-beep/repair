@@ -14,7 +14,7 @@ const fail = (msg: string) => { failures++; console.error('FAIL', msg); };
 
 function contexts(def: ItemDef): Ctx[] {
   const out: Ctx[] = [];
-  const sws = def.sw ? def.sw.options.map((_, i) => i) : [0];
+  const sws = def.sw ? def.sw.map((_, i) => i) : [0];
   const knobsA = def.knobA ? [0.1, 0.27, 0.47, 0.66] : [0.15];
   const knobsB = def.knobB ? [0.3, 0.5, 0.9] : [0.5];
   for (const power of [true, false]) for (const sw of sws) for (const knobA of knobsA) for (const knobB of knobsB)
@@ -29,11 +29,11 @@ function signature(def: ItemDef, faults: string[]) {
   for (const c of contexts(def)) {
     const s = def.sim(f, c);
     parts.push(JSON.stringify([s.obs, s.tp, s.heat, s.ear, s.blow.map(b => b.id)]));
-    if (def.inject) for (const tp of def.tps) parts.push(def.inject(f, c, tp.id));
+    if (def.inject) for (const tp of def.tps) parts.push(JSON.stringify(def.inject(f, c, tp.id)));
   }
   for (const comp of def.comps) {
     const on = faults.map(id => def.faults.find(x => x.id === id)!).filter(x => x.comp === comp.id);
-    parts.push(comp.id, on.map(x => [x.look, x.loupe, x.ohm, x.feel].join('|')).join(','), def.feel?.(f, comp.id) ?? '');
+    parts.push(comp.id, on.map(x => [x.mark, x.fine, JSON.stringify(x.ohm), x.feel].join('|')).join(','), def.feel?.(f, comp.id) ?? '');
   }
   return parts.join('\n');
 }
@@ -52,8 +52,8 @@ for (const def of ITEMS) {
     if (twin) fail(`${def.id}/${fault.id}: ${twin}와 구별되지 않음`);
     sigs.set(sig, fault.id);
     if (!fault.latent) {
-      const base: Ctx = { power: true, sw: def.sw ? def.sw.options.length - 1 : 0, knobA: 0.27, knobB: 0.7, wiggle: null, warm: false, nudge: true, moved: false };
-      const variants = def.sw ? def.sw.options.map((_, i) => ({ ...base, sw: i })) : [base];
+      const base: Ctx = { power: true, sw: def.sw ? def.sw.length - 1 : 0, knobA: 0.27, knobB: 0.7, wiggle: null, warm: false, nudge: true, moved: false };
+      const variants = def.sw ? def.sw.map((_, i) => ({ ...base, sw: i })) : [base];
       const seen = variants.some(c => JSON.stringify(def.sim(new Set([fault.id]), { ...c, nudge: false }).obs) !== JSON.stringify(def.sim(new Set(), { ...c, nudge: false }).obs)
         || JSON.stringify(def.sim(new Set([fault.id]), c).obs) !== JSON.stringify(def.sim(new Set(), c).obs)
         || JSON.stringify(def.sim(new Set([fault.id]), { ...c, moved: true }).obs) !== JSON.stringify(def.sim(new Set(), { ...c, moved: true }).obs));
@@ -74,7 +74,7 @@ for (let seed = 1; seed <= 40; seed++) {
       state.active = job.id;
       const def = ITEMS.find(i => i.id === job.itemId)!;
       setOpen(state, def.chassis ? 2 : 1);
-      setCtx(state, { power: true, sw: def.sw ? def.sw.options.length - 1 : 0 });
+      setCtx(state, { power: true, sw: def.sw ? def.sw.length - 1 : 0 });
       useTool(state, 'look', { comp: def.comps[0].id });
       setCtx(state, { power: false, sw: 0 });
       let guard = 0;
@@ -84,7 +84,7 @@ for (let seed = 1; seed <= 40; seed++) {
         setOpen(state, def.comps.find(c => c.id === f.comp)!.front ? 0 : def.chassis ? 2 : 1);
         const r = repair(state, f.comp, f.fix);
         if (!r.ok) { state.minute = 0; repair(state, f.comp, f.fix); }
-        setCtx(state, { power: true, sw: def.sw ? def.sw.options.length - 1 : 0 });
+        setCtx(state, { power: true, sw: def.sw ? def.sw.length - 1 : 0 });
         nudge(state);
         watch(state);
         setCtx(state, { power: false, sw: 0 });
