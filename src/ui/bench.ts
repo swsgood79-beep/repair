@@ -11,6 +11,7 @@ import { sfx } from '../audio';
 import { button, holder, region, regionById, toast, ui } from './core';
 import { FEEL_WORD, HEAT_WORD, SOUND_WORD, BAD_SOUND, BAD_FEEL, ohmText, tpState, tpText } from './words';
 import { cluesOf, statusOf, suspects, type Clue, type Status } from './clues';
+import { startRepairMini, startScrews } from './mini';
 
 /* ---------- 배치 ---------- */
 export const STAGE = { x: 4, y: 52, w: 404, h: 212 };
@@ -251,9 +252,17 @@ function drawCover(p: Painter, def: ItemDef, job: Job, t: number) {
   }
 }
 
+const SCREWS: Record<string, number> = { lamp: 3, fan: 4, radio: 6, cassette: 5, clock: 2 };
 function openCover(level: number) {
-  const r = setOpen(holder.state, level);
-  if (!r.ok) toast(r.text, true); else sfx('pop');
+  const state = holder.state;
+  const job = activeJob(state);
+  if (!job) return;
+  const def = item(job.itemId);
+  const apply = () => { const r = setOpen(state, level); if (!r.ok) toast(r.text, true); else sfx('pop'); };
+  if (level <= job.open) { apply(); toast('나사를 다시 조였다'); return; }
+  if (state.minute + 5 > 600) return toast('오늘은 시간이 모자랍니다', true);
+  const n = level === 2 ? 4 : SCREWS[def.id] ?? 4;
+  startScrews(def.comps[0], n, level === 2 ? `${def.chassisLabel} 빼기` : `${def.coverLabel} 열기`, apply);
 }
 
 function drawWires(p: Painter, def: ItemDef, job: Job, layerFilter: (l: number) => boolean) {
@@ -586,7 +595,7 @@ export function drawAccuse(p: Painter, t: number) {
     acts.forEach((a, i) => {
       const bw = (Wd - 102 - (acts.length - 1) * 4) / acts.length;
       const price = a === 'replace' ? comp.part ?? 0 : 0;
-      button(p, 'acc:' + a, X + 92 + i * (bw + 4), Y + 58, bw, 46, ACTION_NAME[a], () => commitAccuse(a), { kind: 'primary', size: 12, sub: `${repairMinutes(def, a)}분${price ? ' ' + won(price) : ''}` });
+      button(p, 'acc:' + a, X + 92 + i * (bw + 4), Y + 58, bw, 46, ACTION_NAME[a], () => startAccuse(a), { kind: 'primary', size: 12, sub: `${repairMinutes(def, a)}분${price ? ' ' + won(price) : ''}` });
     });
     p.wrap('틀리면 시간과 부품값을 쓰고 수리비가 10% 깎인다. 교체는 그 부품의 고장을 다 없애지만 돈이 든다.', X + 10, Y + 116, Wd - 20, 9, '#5b5644', 12);
     button(p, 'acc-x', X + Wd - 70, Y + Hd - 28, 60, 22, '취소', () => { ui.overlay = null; }, { kind: 'quiet', size: 10 });
@@ -614,12 +623,28 @@ export function drawAccuse(p: Painter, t: number) {
   }
 }
 
-function commitAccuse(a: Action) {
+/** 고칠 방법을 고르면 손맛 미니게임을 거쳐 자물쇠 결과로 간다 */
+function startAccuse(a: Action) {
   const ov = ui.overlay;
   if (ov?.kind !== 'accuse') return;
   const state = holder.state;
   const job = activeJob(state)!;
-  if (job.ctx.power && job.itemId !== 'clock') { setCtx(state, { power: false }); toast('플러그를 뽑고 작업했다'); }
+  if (job.ctx.power && job.itemId !== 'clock') { setCtx(state, { power: false }); toast('플러그를 뽑았다'); }
+  const blocked = repairCheck(state, ov.comp, a);
+  if (blocked) { toast(blocked.text, true); ui.overlay = null; return; }
+  const comp = compOf(item(job.itemId), ov.comp)!;
+  ui.overlay = null;
+  startRepairMini(comp, a, redo => {
+    ui.overlay = { kind: 'accuse', comp: comp.id };
+    state.minute = Math.min(600, state.minute + redo);
+    commitAccuse(a);
+  }, () => { ui.overlay = { kind: 'accuse', comp: comp.id }; });
+}
+
+function commitAccuse(a: Action) {
+  const ov = ui.overlay;
+  if (ov?.kind !== 'accuse') return;
+  const state = holder.state;
   const blocked = repairCheck(state, ov.comp, a);
   if (blocked) { toast(blocked.text, true); ui.overlay = null; return; }
   const r = repair(state, ov.comp, a);

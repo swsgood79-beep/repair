@@ -5,6 +5,7 @@ import { holder, hit, resetRegions, ui, type Region } from './core';
 import { drawAccuse, drawBench } from './bench';
 import { drawCounter, drawEnding, drawHud, drawOverlay, drawTitle } from './scenes';
 import { drawTutorial } from './tutorial';
+import { drawMini } from './mini';
 import { activeJob, simulate } from '../game';
 
 let painter: Painter;
@@ -95,6 +96,7 @@ function frame(t: number) {
     p.rect(0, 0, W, H, '#16201c');
     drawBench(p, t);
     drawAccuse(p, t);
+    drawMini(p, t);
     drawTutorial(p, t);
     drawHud(p);
     const job = activeJob(holder.state);
