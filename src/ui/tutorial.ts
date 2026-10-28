@@ -9,7 +9,8 @@ const STEPS: { text: string; target: () => string; done: () => boolean }[] = [
   { text: '스위치도 눌러 켜자', target: () => ui.tool !== 'hand' ? 'tool:hand' : 'c:switch', done: () => job()?.ctx.sw === 1 },
   { text: '전구가 안 켜진다! 전기가 어디까지 오나? [테스터]로 소켓 단자(놋쇠 점)를 재자', target: () => ui.tool !== 'tester' ? 'tool:tester' : 't:t3', done: () => !!job()?.found.t3?.tp },
   { text: '소켓까지 전기는 온다! 그럼 범인은 그 뒤, 전구다. [눈]으로 전구를 보자', target: () => ui.tool !== 'look' ? 'tool:look' : 'c:bulb', done: () => !!job()?.found.bulb?.look },
-  { text: '필라멘트가 끊겼다! 용의자 보드에서 전구를 눌러 [교체]하자. 직접 돌려 빼고 끼운다', target: () => ui.overlay?.kind === 'accuse' ? 'acc:replace' : 's:bulb', done: () => !job()?.faults.length },
+  { text: '필라멘트가 끊겼다! 고치기 전에 감전되지 않게 [플러그 뽑기]부터', target: () => 'power', done: () => !job()?.ctx.power || !job()?.faults.length },
+  { text: '용의자 보드에서 전구를 눌러 [교체]하자. 헌 전구 규격을 보고 같은 걸 끼운다', target: () => ui.overlay?.kind === 'accuse' ? 'acc:replace' : 's:bulb', done: () => !job()?.faults.length },
   { text: '자물쇠가 풀렸다! 확인을 누르고, 다시 플러그를 꽂아 켜 보자', target: () => ui.overlay?.kind === 'accuse' ? 'acc-ok' : 'power', done: () => { const j = job(); return !!j && !ui.overlay && j.ctx.power && j.ctx.sw === 1; } },
   { text: '환하게 켜졌다! [돌려주기]로 손님에게 건네자', target: () => 'handback', done: () => holder.state.jobs.every(j => j.id !== 'j1') },
 ];

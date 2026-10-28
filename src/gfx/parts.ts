@@ -227,6 +227,59 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       p.disc(cx, cy, 3, C.brass);
       break;
     }
+    case 'sole': {
+      const hot = fx.glow?.element ?? 0;
+      for (let i = 0; i < h; i++) { const inset = Math.max(0, (i - h * 0.5) * 0.9); p.rect(x + inset * (i > h / 2 ? 1 : 0) + (i < 3 ? 6 - i * 2 : 0), y + i, w - inset * 2 - (i < 3 ? 12 - i * 4 : 0), 1, i < 2 ? '#e5e9ec' : '#b9c1c6'); }
+      for (let i = 0; i < 9; i++) p.disc(x + w * 0.12 + i * w * 0.09, y + h * 0.5, 2, '#5d686d');
+      if (hot > 0) p.rect(x + 4, y + 2, w - 8, h * 0.5, `rgba(255,140,60,${0.25 * hot})`);
+      break;
+    }
+    case 'element': {
+      const g = fx.glow?.element ?? 0;
+      const col = g > 0.7 ? '#ff7a3a' : g > 0 ? '#c8643a' : '#8a6a5a';
+      for (let i = 0; i < w; i += 2) p.rect(x + i, cy + Math.sin(i * 0.5) * (h * 0.35), 2, 2, col);
+      p.rect(x, cy - 1, 4, 3, C.steel); p.rect(x + w - 4, cy - 1, 4, 3, C.steel);
+      break;
+    }
+    case 'thermo': {
+      p.box(x, y + h * 0.4, w, h * 0.6, '#3d3b37', '#1b1a18');
+      p.rect(x + 6, y + h * 0.3, w * 0.6, 3, '#c79a45'); p.rect(x + 6, y + h * 0.3 + 3, w * 0.6, 2, '#9aa3a8');
+      p.disc(x + w * 0.66 + 6, y + h * 0.33, 3, '#e0e0e0'); p.disc(x + w * 0.66 + 6, y + h * 0.33 + 6, 3, '#e0e0e0');
+      p.disc(x + w - 14, y + h * 0.7, 9, '#2a2a2a'); p.rect(x + w - 15, y + h * 0.7 - 9, 2, 8, C.cream);
+      break;
+    }
+    case 'neon': {
+      const g = fx.glow?.neon ?? 0;
+      if (g > 0) p.disc(cx, cy, w * 0.7, 'rgba(255,120,60,0.25)');
+      p.disc(cx, cy, Math.min(w, h) / 2 - 1, g > 0 ? '#ff8a4a' : '#5a3a2a'); p.ring(cx, cy, Math.min(w, h) / 2 - 1, '#2a1a10');
+      break;
+    }
+    case 'handset': {
+      const lifted = ctx.sw === 1 ? -6 : 0;
+      p.box(x + 10, y + h * 0.25 + lifted, w - 20, h * 0.4, '#1c1c1c', '#000');
+      p.rect(x + 12, y + h * 0.25 + 1 + lifted, w - 24, 1, '#3a3a3a');
+      break;
+    }
+    case 'mic':
+      p.disc(cx, cy, Math.min(w, h) / 2 - 1, '#1c1c1c'); p.disc(cx, cy, Math.min(w, h) / 2 - 5, '#2a2a2a');
+      for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; p.disc(cx + Math.cos(a) * (w * 0.2), cy + Math.sin(a) * (h * 0.2), 1, '#777'); }
+      p.disc(cx, cy, 1, '#777');
+      break;
+    case 'bell': {
+      const v = fx.ring ? Math.round(Math.sin(t * 60) * 1.5) : 0;
+      p.disc(cx + v, cy, w / 2 - 2, C.brass); p.ring(cx + v, cy, w / 2 - 2, '#6d5214'); p.disc(cx + v - w * 0.12, cy - h * 0.12, w * 0.12, '#f0d27a');
+      p.disc(cx, cy, 3, '#3a2a10');
+      p.line(cx + w * 0.4, cy + h * 0.45, cx + w * 0.25 - v * 2, cy + h * 0.2, '#7a7a7a', 2);
+      break;
+    }
+    case 'rotary': {
+      const r = Math.min(w, h) / 2 - 2;
+      p.disc(cx, cy, r, '#e8e2d0'); p.ring(cx, cy, r, '#2a2a2a');
+      for (let i = 0; i < 10; i++) { const a = -Math.PI * 0.25 - (i / 10) * Math.PI * 1.55; p.disc(cx + Math.cos(a) * r * 0.7, cy + Math.sin(a) * r * 0.7, Math.max(2, r * 0.13), '#2a2a2a'); }
+      p.disc(cx, cy, r * 0.35, '#c9c1a4');
+      p.rect(cx + r * 0.55, cy + r * 0.3, 3, r * 0.5, C.steel);
+      break;
+    }
   }
   void id;
 }
@@ -291,6 +344,12 @@ export function drawItemIcon(p: Painter, id: string, x: number, y: number, s = 1
       break;
     case 'cassette':
       r(2, 6, 28, 20, '#b9b2a3'); r(2, 25, 28, 1, '#4f4a42'); r(5, 9, 15, 8, '#2c2a28'); r(7, 11, 4, 4, '#f2efe7'); r(14, 11, 4, 4, '#f2efe7'); r(22, 9, 6, 6, '#3a3027'); r(5, 20, 20, 3, '#e9e2d0');
+      break;
+    case 'iron':
+      r(4, 20, 26, 6, '#c9cfd3'); r(6, 18, 22, 3, '#8d9297'); r(8, 8, 18, 10, '#c0392b'); r(10, 4, 14, 4, '#2a2a2a'); r(10, 4, 2, 6, '#2a2a2a'); r(22, 4, 2, 6, '#2a2a2a'); r(20, 10, 3, 3, '#ff8a4a');
+      break;
+    case 'phone':
+      r(4, 12, 26, 16, '#1c1c1c'); r(6, 4, 22, 5, '#1c1c1c'); r(4, 6, 4, 6, '#1c1c1c'); r(26, 6, 4, 6, '#1c1c1c'); r(12, 15, 10, 10, '#e8e2d0'); r(16, 19, 2, 2, '#2a2a2a');
       break;
     case 'clock':
       r(9, 0, 14, 30, '#6b4529'); r(10, 1, 12, 28, '#5a3920'); r(11, 2, 10, 10, '#efe6cc'); r(15, 4, 1, 4, '#2b2a26'); r(15, 7, 3, 1, '#2b2a26'); r(12, 14, 8, 14, 'rgba(200,230,230,0.15)'); r(15, 14, 1, 9, C.brass); r(13, 22, 5, 5, '#d9b65e');

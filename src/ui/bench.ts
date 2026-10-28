@@ -15,9 +15,22 @@ import { startRepairMini, startScrews } from './mini';
 
 /* ---------- 배치 ---------- */
 export const STAGE = { x: 4, y: 52, w: 404, h: 212 };
-const K = Math.min(STAGE.w / 640, STAGE.h / 380);
-const OX = STAGE.x + (STAGE.w - 640 * K) / 2;
-const OY = STAGE.y + (STAGE.h - 380 * K) / 2;
+const K0 = Math.min(STAGE.w / 640, STAGE.h / 380);
+/** 작업대 카메라: 부품을 살필 때 그쪽으로 다가간다 */
+const cam = { z: 1, fx: 320, fy: 190, tz: 1, tfx: 320, tfy: 190 };
+let K = K0, OX = 0, OY = 0;
+function updateCamera() {
+  cam.z += (cam.tz - cam.z) * 0.18; cam.fx += (cam.tfx - cam.fx) * 0.18; cam.fy += (cam.tfy - cam.fy) * 0.18;
+  K = K0 * cam.z;
+  // 화면 밖으로 물건이 빠지지 않게 초점을 묶는다
+  const halfW = STAGE.w / 2 / K, halfH = STAGE.h / 2 / K;
+  const fx = cam.z > 1.01 ? Math.max(halfW - 20, Math.min(660 - halfW, cam.fx)) : 320;
+  const fy = cam.z > 1.01 ? Math.max(halfH - 10, Math.min(390 - halfH, cam.fy)) : 190;
+  OX = STAGE.x + STAGE.w / 2 - fx * K;
+  OY = STAGE.y + STAGE.h / 2 - fy * K;
+}
+export function zoomTo(x: number, y: number, z = 2.2) { cam.tz = z; cam.tfx = x; cam.tfy = y; }
+export function zoomOut() { cam.tz = 1; cam.tfx = 320; cam.tfy = 190; }
 const mx = (v: number) => OX + v * K;
 const my = (v: number) => OY + v * K;
 export function compRect(c: Comp) { return { x: mx(c.x), y: my(c.y), w: c.w * K, h: c.h * K }; }
@@ -56,7 +69,13 @@ function applyTool(target: { comp?: string; tp?: string }) {
   const def = item(job.itemId);
   const comp = target.comp ? compOf(def, target.comp) : undefined;
   const tp = target.tp ? def.tps.find(t => t.id === target.tp) : undefined;
-  const at = comp ? compRect(comp) : { x: mx(tp!.x) - 4, y: my(tp!.y) - 4, w: 8, h: 8 };
+  if (ui.tool !== 'driver' && !(ui.tool === 'hand' && comp?.hand && comp.hand !== 'nudge')) {
+    const fx0 = comp ? comp.x + comp.w / 2 : tp!.x, fy0 = comp ? comp.y + comp.h / 2 : tp!.y;
+    const size = comp ? Math.max(comp.w, comp.h) : 40;
+    zoomTo(fx0, fy0, Math.max(1.6, Math.min(3, 150 / size)));
+  }
+  // 말풍선 위치는 물건 좌표로 저장해 카메라가 움직여도 따라가게 한다
+  const at = comp ? { x: comp.x, y: comp.y, w: comp.w, h: comp.h } : { x: tp!.x - 6, y: tp!.y - 6, w: 12, h: 12 };
   const px = at.x + at.w / 2, py = at.y + at.h / 2;
   switch (ui.tool) {
     case 'hand': {
@@ -129,7 +148,7 @@ export function drawBench(p: Painter, t: number) {
     drawToolbar(p, null);
     return;
   }
-  if (fx.lastJob !== job.id) { fx.lastJob = job.id; fx.note = null; fx.meterAt = null; ui.meter = null; }
+  if (fx.lastJob !== job.id) { fx.lastJob = job.id; fx.note = null; fx.meterAt = null; ui.meter = null; zoomOut(); cam.z = 1; }
   const def = item(job.itemId);
   const sim = simulate(job);
   const clues = cluesOf(def, job);
@@ -179,7 +198,10 @@ function drawTicket(p: Painter, job: Job | null, t: number) {
 
 function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof simulate>, status: Record<string, Status>, t: number) {
   const S = STAGE;
+  updateCamera();
   p.box(S.x, S.y, S.w, S.h, '#1b2823', C.ink);
+  p.g.save(); p.g.beginPath(); p.g.rect(S.x + 1, S.y + 1, S.w - 2, S.h - 2); p.g.clip();
+  p.t.save(); p.t.beginPath(); p.t.rect(S.x + 1, S.y + 1, S.w - 2, S.h - 2); p.t.clip();
   for (let x = S.x + 10; x < S.x + S.w; x += 16) p.rect(x, S.y + 1, 1, S.h - 2, '#22332b');
   for (let y = S.y + 10; y < S.y + S.h; y += 16) p.rect(S.x + 1, y, S.w - 2, 1, '#22332b');
   // 작업등 불빛
@@ -192,6 +214,11 @@ function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof si
   if (job.open === 0) drawWires(p, def, job, l => l === 0);
   for (const c of outer) drawComp(p, c, job, sim, status, t);
   for (const tp of def.tps) if (visible(job, tp.layer)) drawTP(p, tp, job, t);
+  p.g.restore(); p.t.restore();
+  if (cam.tz > 1.01) {
+    p.rect(S.x + 1, S.y + 1, S.w - 2, 1, C.gold); p.rect(S.x + 1, S.y + S.h - 2, S.w - 2, 1, C.gold);
+    button(p, 'zoom-out', S.x + S.w - 70, S.y + 4, 64, 20, '전체 보기', () => zoomOut(), { kind: 'quiet', size: 10 });
+  }
   // 지금 상태 띠
   const alive = Object.values(sim.fx.glow ?? {}).some(v => v > 0) || sim.fx.spin || sim.fx.swing || sim.fx.tone;
   p.rect(S.x + 1, S.y + S.h - 17, S.w - 2, 16, 'rgba(10,16,13,0.85)');
@@ -218,6 +245,15 @@ function decor(p: Painter, def: ItemDef) {
       break;
     case 'cassette':
       B(84, 60, 486, 282, '#b9b2a3', '#4f4a42'); R(90, 66, 474, 4, '#d6d0c2'); B(104, 106, 166, 62, '#2c2a28', '#111');
+      break;
+    case 'iron':
+      // 손잡이와 몸통
+      B(150, 70, 380, 170, '#b8392b', '#5a1a12'); R(156, 76, 368, 4, '#d9574a');
+      B(200, 20, 280, 40, '#2a2a2a', '#000'); B(200, 20, 30, 70, '#2a2a2a', '#000'); B(450, 20, 30, 70, '#2a2a2a', '#000');
+      break;
+    case 'phone':
+      B(150, 120, 340, 220, '#1c1c1c', '#000'); R(156, 126, 328, 4, '#3a3a3a');
+      B(170, 60, 300, 60, '#1c1c1c', '#000');
       break;
     case 'clock':
       B(212, 30, 216, 338, '#6b4529', '#2b1a0e'); B(226, 40, 188, 318, '#5a3920', '#3f2714'); B(262, 214, 116, 140, 'rgba(200,230,230,0.08)', C.brass);
@@ -252,17 +288,19 @@ function drawCover(p: Painter, def: ItemDef, job: Job, t: number) {
   }
 }
 
-const SCREWS: Record<string, number> = { lamp: 3, fan: 4, radio: 6, cassette: 5, clock: 2 };
+const SCREWS: Record<string, number> = { lamp: 3, fan: 4, radio: 6, cassette: 5, clock: 2, iron: 3, phone: 4 };
 function openCover(level: number) {
   const state = holder.state;
   const job = activeJob(state);
   if (!job) return;
   const def = item(job.itemId);
   const apply = () => { const r = setOpen(state, level); if (!r.ok) toast(r.text, true); else sfx('pop'); };
-  if (level <= job.open) { apply(); toast('나사를 다시 조였다'); return; }
   if (state.minute + 5 > 600) return toast('오늘은 시간이 모자랍니다', true);
-  const n = level === 2 ? 4 : SCREWS[def.id] ?? 4;
-  startScrews(def.comps[0], n, level === 2 ? `${def.chassisLabel} 빼기` : `${def.coverLabel} 열기`, apply);
+  const closing = level < job.open;
+  const which = closing ? job.open : level;
+  const n = which === 2 ? 4 : SCREWS[def.id] ?? 4;
+  const name = which === 2 ? def.chassisLabel! : def.coverLabel;
+  startScrews(def.comps[0], n, closing ? `${name} 다시 조이기` : `${name} 열기`, apply, closing, () => {});
 }
 
 function drawWires(p: Painter, def: ItemDef, job: Job, layerFilter: (l: number) => boolean) {
@@ -435,10 +473,12 @@ function drawToolbar(p: Painter, job: Job | null) {
   button(p, 'watch', hx, 330, 100, 26, '10분 지켜보기', () => { const r = watch(state); if (!r.ok) toast(r.text, true); else { toast('10분 동안 켜 두고 지켜봤다'); sfx('tick', 2); } }, { kind: 'quiet', size: 10, disabled: !job });
   const bx = 404;
   button(p, 'handback', bx, 298, 232, 30, '돌려주기', () => {
+    if (job && job.open > 0) { toast('덮개를 닫고 나사부터 조여야 돌려줄 수 있다', true); return; }
+    if (job && job.ctx.power) setCtx(state, { power: false, sw: 0 });
     const r = handBack(state);
     if ('kind' in r) { ui.counter = { kind: 'return', outcome: r }; ui.scene = 'counter'; ui.popups = []; ui.meter = null; sfx(r.kind === 'paid' ? 'register' : 'lockFail'); }
     else toast(r.text, true);
-  }, { kind: 'primary', disabled: !job, size: 13, sub: job ? (job.faults.length ? '손님이 켜 보고 판단한다' : '자물쇠를 다 풀었다!') : undefined });
+  }, { kind: 'primary', disabled: !job, size: 13, sub: job ? (job.open ? '먼저 덮개를 닫고 조이자' : job.faults.length ? '손님이 켜 보고 판단한다' : '자물쇠를 다 풀었다!') : undefined });
   button(p, 'shelf', bx, 332, 114, 24, '선반 · 다른 물건', () => { ui.overlay = { kind: 'shelf' }; }, { kind: 'quiet', size: 10 });
   button(p, 'giveup', bx + 118, 332, 114, 24, '포기하고 돌려보내기', () => { ui.overlay = { kind: 'giveup' }; }, { kind: 'quiet', size: 9, disabled: !job });
 }
@@ -446,7 +486,8 @@ function drawToolbar(p: Painter, job: Job | null) {
 /* ---------- 연출 ---------- */
 function drawPopups(p: Painter, t: number) {
   ui.popups = ui.popups.filter(pp => t - pp.t0 < (pp.kind === 'closeup' ? 3.5 : 2.4));
-  for (const pp of ui.popups) {
+  for (const raw of ui.popups) {
+    const pp = { ...raw, x: mx(raw.x), y: my(raw.y) };
     const age = t - pp.t0;
     if (pp.kind === 'closeup') {
       const r = 34;
@@ -538,8 +579,9 @@ function needleTarget(t: number) {
 }
 
 function drawMeterPopup(p: Painter, t: number) {
-  const at = fx.meterAt, m = ui.meter;
-  if (!at || !m || t - at.t0 > 3.2) return;
+  const raw = fx.meterAt, m = ui.meter;
+  if (!raw || !m || t - raw.t0 > 3.2) return;
+  const at = { ...raw, x: mx(raw.x), y: my(raw.y) };
   const w = 128, h = 74;
   const x = Math.max(STAGE.x + 4, Math.min(STAGE.x + STAGE.w - w - 4, at.x + 14));
   const y = Math.max(STAGE.y + 4, Math.min(STAGE.y + STAGE.h - h - 20, at.y - h - 6));
@@ -630,7 +672,7 @@ function startAccuse(a: Action) {
   if (ov?.kind !== 'accuse') return;
   const state = holder.state;
   const job = activeJob(state)!;
-  if (job.ctx.power && job.itemId !== 'clock') { setCtx(state, { power: false }); toast('플러그를 뽑았다'); }
+  if (job.ctx.power && job.itemId !== 'clock') { ui.overlay = null; toast('감전 위험! 먼저 플러그를 뽑으세요', true); sfx('zap', 0.5); return; }
   const blocked = repairCheck(state, ov.comp, a);
   if (blocked) { toast(blocked.text, true); ui.overlay = null; return; }
   const comp = compOf(item(job.itemId), ov.comp)!;

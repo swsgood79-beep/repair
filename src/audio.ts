@@ -177,6 +177,19 @@ function startAppliance() {
   const notes = [69, 72, 74, 76, 74, 72, 69, 67, 69, 72, 76, 79, 76, 74, 72, 74];
   let i = 0;
   window.setInterval(() => { tone2.frequency.setTargetAtTime(mtof(notes[i++ % notes.length]) * (current.wobble ? 0.97 + Math.sin(i) * 0.015 : 1), a.currentTime, 0.02); }, 300);
+  // 전화기: 신호음과 벨
+  const dial = a.createOscillator(); dial.frequency.value = 425; dial.connect(g('dial')); dial.start();
+  const bell = a.createOscillator(); bell.type = 'square'; bell.frequency.value = 950;
+  const bellBp = a.createBiquadFilter(); bellBp.type = 'bandpass'; bellBp.frequency.value = 1900; bellBp.Q.value = 3;
+  bell.connect(bellBp).connect(g('ring')); bell.start();
+  let ringOn = false;
+  window.setInterval(() => {
+    const target = appliance.ring;
+    if (!target) return;
+    ringOn = !ringOn;
+    const cycle = Math.floor(a.currentTime / 1.2) % 2 === 0;
+    target.gain.setTargetAtTime(current.ring && cycle && ringOn ? 0.12 : 0, a.currentTime, 0.004);
+  }, 25);
   let tock = false;
   const tickLoop = () => {
     if (current.tick && sfxOn) { tone(tock ? 2600 : 1900, 0.03, { type: 'square', gain: 0.05, bus: applianceBus }); tock = !tock; }
@@ -201,8 +214,9 @@ export function updateSound(fx: FX) {
   set('noise', (fx.noise ?? 0) * 0.25);
   set('whirr', (fx.whirr ?? 0) * 0.5);
   set('tone', (fx.tone ?? 0) * 0.18);
+  set('dial', (fx.dial ?? 0) * 0.08);
   // 물건이 소리를 내면 배경음악을 살짝 줄인다
-  const busy = (fx.tone ?? 0) + (fx.hum ?? 0) + (fx.noise ?? 0) + (fx.whirr ?? 0) > 0.1;
+  const busy = (fx.tone ?? 0) + (fx.hum ?? 0) + (fx.noise ?? 0) + (fx.whirr ?? 0) + (fx.dial ?? 0) + (fx.ring ?? 0) > 0.1;
   const next = busy ? 0.45 : 1;
   if (next !== duck) { duck = next; if (musicOn) musicBus.gain.setTargetAtTime(musicLevel * duck, t, 0.4); }
 }

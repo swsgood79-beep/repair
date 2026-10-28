@@ -6,6 +6,34 @@ export const DEADLINE = 14;
 export const START_DEBT = 600000;
 export const DAILY_COST = 20000;
 export const SHELF_LIMIT = 6;
+
+/** 가게 키우기: 단계가 오를수록 고칠 수 있는 물건이 늘어난다 */
+export const SHOP_LEVELS = [
+  { level: 1, name: '골목 수리점', price: 0, items: ['lamp', 'fan'], desc: '할아버지가 남긴 한 칸짜리 가게' },
+  { level: 2, name: '작업대 넓히기', price: 120000, items: ['radio', 'cassette'], desc: '진공관과 카세트를 다룰 넓은 작업대와 부품장' },
+  { level: 3, name: '2층 공방', price: 250000, items: ['clock', 'iron'], desc: '시계 선반과 열기구 작업대가 있는 2층' },
+  { level: 4, name: '한결전파사 본점', price: 400000, items: ['phone'], desc: '간판을 새로 달고 통신기기까지 다루는 본점' },
+];
+export const levelOf = (state: GameState) => state.level ?? 1;
+export function shelfLimit(state: GameState) { return SHELF_LIMIT + levelOf(state) - 1; }
+
+export function expand(state: GameState): Result {
+  const next = SHOP_LEVELS[levelOf(state)];
+  if (!next) return fail('이미 본점입니다');
+  if (state.money < next.price) return fail(`${won(next.price)}이 필요합니다`);
+  state.money -= next.price;
+  state.summary.parts += next.price;
+  state.level = next.level;
+  state.unlocked ??= {};
+  for (const id of next.items) state.unlocked[id] ??= state.day;
+  checkWin(state);
+  return { ok: true, text: `${next.name} 완성! ${next.items.map(id => item(id).name).join(', ')} 수리 시작` };
+}
+
+/** 빚을 다 갚고 본점까지 키우면 성공 */
+function checkWin(state: GameState) {
+  if (state.debt <= 0 && levelOf(state) >= SHOP_LEVELS.length && !state.endless) state.ending = 'kept';
+}
 const SAVE_KEY = 'nopo-repair:v2';
 
 export const TOOL_SHOP = [
@@ -32,7 +60,7 @@ export function newGame(seed = Date.now()): GameState {
     version: 2, seed: seed | 0, day: 1, minute: 0, money: 30000, debt: START_DEBT, trust: 3,
     jobs: [], active: null, tools: [], casebook: [], arrivals: [],
     summary: { day: 1, income: 0, parts: 0, expenses: 0, returned: 0, lost: 0 },
-    history: [], pending: [], ending: null, endless: false, tutorial: 0, nextId: 1, sound: true, music: true,
+    history: [], pending: [], ending: null, endless: false, tutorial: 0, nextId: 1, sound: true, music: true, level: 1, unlocked: { lamp: 1, fan: 1 },
   };
   const first = makeJob(state, 'lamp', ['bulb_open'], 1);
   const second = makeJob(state, 'fan', ['cap_dead'], 0);
@@ -53,6 +81,8 @@ export function load(): GameState | null {
     const data = JSON.parse(raw) as GameState;
     if (data?.version !== 2 || !Array.isArray(data.jobs)) return null;
     for (const job of [...data.jobs, ...data.pending]) item(job.itemId);
+    data.level ??= 1;
+    data.unlocked ??= { lamp: 1, fan: 1 };
     return data;
   } catch { return null; }
 }
@@ -93,10 +123,13 @@ function makeJob(state: GameState, itemId: string, faults: string[], customer = 
 }
 
 function randomJob(state: GameState): Job {
-  const items = ITEMS.filter(i => i.minDay <= state.day);
-  const fresh = items.filter(i => i.minDay >= state.day - 2 && i.minDay > 1);
-  const def = fresh.length && rand(state) < 0.45 ? pick(state, fresh) : pick(state, items);
-  const pool = def.faults.filter(f => f.minDay <= state.day);
+  const unlocked = state.unlocked ?? { lamp: 1, fan: 1 };
+  const items = ITEMS.filter(i => unlocked[i.id] !== undefined);
+  const fresh = items.filter(i => unlocked[i.id] >= state.day - 2 && unlocked[i.id] > 1);
+  const def = fresh.length && rand(state) < 0.5 ? pick(state, fresh) : pick(state, items);
+  // 새로 연 물건은 쉬운 고장부터, 날이 갈수록 어려운 고장도 나온다
+  const since = state.day - (unlocked[def.id] ?? 1);
+  const pool = def.faults.filter(f => f.minDay <= Math.max(state.day, def.minDay) && f.minDay <= def.minDay + since + (def.minDay <= 2 ? 99 : 0));
   const r = rand(state);
   const n = state.day <= 2 ? 1 : state.day <= 5 ? (r < 0.35 ? 2 : 1) : (r < 0.2 ? 3 : r < 0.65 ? 2 : 1);
   const chosen: Fault[] = [];
@@ -412,7 +445,8 @@ export function payDebt(state: GameState, amount: number): Result {
   if (pay <= 0) return fail('갚을 돈이 없습니다');
   state.money -= pay;
   state.debt -= pay;
-  return { ok: true, text: `${won(pay)} 갚음` };
+  checkWin(state);
+  return { ok: true, text: state.debt ? `${won(pay)} 갚음` : '빚을 다 갚았다!' };
 }
 
 export function buyTool(state: GameState, id: string): Result {
@@ -443,7 +477,7 @@ export function endDay(state: GameState): DayReport {
   const summary = { ...state.summary };
   state.history.push(summary);
   if (state.money < 0) state.ending = 'lost';
-  else if (state.day >= DEADLINE && !state.endless) state.ending = state.debt <= 0 ? 'kept' : 'lost';
+  else if (state.day >= DEADLINE && state.debt > 0 && !state.endless) state.ending = 'lost';
   return { summary, collected };
 }
 
@@ -456,8 +490,8 @@ export function startDay(state: GameState): string[] {
   const back = state.pending.filter(j => j.dueDay - 1 <= state.day);
   state.pending = state.pending.filter(j => j.dueDay - 1 > state.day);
   for (const job of back) { state.trust = Math.max(0, state.trust - 2); arrivals.push(job); }
-  const count = 2 + (state.trust >= 6 ? 1 : 0) + (state.trust >= 9 ? 1 : 0);
-  for (let i = 0; i < count && state.jobs.length + arrivals.length < SHELF_LIMIT; i++) arrivals.push(randomJob(state));
+  const count = 2 + Math.floor((levelOf(state) - 1) / 2) + (state.trust >= 6 ? 1 : 0) + (state.trust >= 9 ? 1 : 0);
+  for (let i = 0; i < count && state.jobs.length + arrivals.length < shelfLimit(state); i++) arrivals.push(randomJob(state));
   state.jobs.push(...arrivals);
   state.arrivals = arrivals.map(j => j.id);
   if (!activeJob(state)) state.active = state.jobs[0]?.id ?? null;

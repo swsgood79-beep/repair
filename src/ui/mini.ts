@@ -8,7 +8,7 @@ import { button, region, ui } from './core';
  * 수리 손맛: 실제 작업 순서를 단계별 미니게임으로 진행한다.
  * 실패하면 그 단계를 다시 하고, 모든 단계를 마치면 onDone이 불린다.
  */
-type StepKind = 'unscrew' | 'twistOut' | 'twistIn' | 'desolder' | 'pull' | 'insert' | 'solder' | 'strip' | 'spray' | 'scrub' | 'drops' | 'route' | 'beat' | 'bend' | 'tap' | 'belt';
+type StepKind = 'unscrew' | 'screwIn' | 'twistOut' | 'twistIn' | 'desolder' | 'pull' | 'insert' | 'solder' | 'strip' | 'spray' | 'scrub' | 'drops' | 'route' | 'beat' | 'bend' | 'tap' | 'belt';
 interface Step { kind: StepKind; label: string; leg?: number; n?: number }
 
 interface Mini {
@@ -31,11 +31,14 @@ const A = { x: 4, y: 22, w: 632, h: 270 };
 const CX = 320, CY = 182;
 
 /* ---------- 계획 ---------- */
-export function startScrews(comp: Comp, n: number, title: string, onDone: () => void) {
-  begin({ title, comp, steps: [{ kind: 'unscrew', label: `나사 ${n}개를 반시계 방향으로 돌려 풀자`, n }], onDone: () => onDone() });
+export function startScrews(comp: Comp, n: number, title: string, onDone: () => void, tighten = false, onCancel?: () => void) {
+  begin({
+    title, comp, onDone: () => onDone(), onCancel,
+    steps: [tighten ? { kind: 'screwIn', label: `덮개를 맞추고 나사 ${n}개를 시계 방향으로 조이자`, n } : { kind: 'unscrew', label: `나사 ${n}개를 반시계 방향으로 돌려 풀자`, n }],
+  });
 }
 
-const SOLDERED_SAFE = new Set(['cord', 'bulb', 'fuse', 'outtube', 'roller', 'barrel', 'susp', 'bearing', 'belt']);
+const SOLDERED_SAFE = new Set(['cord', 'bulb', 'fuse', 'outtube', 'roller', 'barrel', 'susp', 'bearing', 'belt', 'mic', 'neon']);
 export function startRepairMini(comp: Comp, action: Action, onDone: (redo: number) => void, onCancel: () => void) {
   const steps: Step[] = [];
   const legs = (verb: 'desolder' | 'solder', what: string) => [0, 1].forEach(leg => steps.push({ kind: verb, leg, label: `${what} (${leg + 1}/2)` }));
@@ -46,6 +49,7 @@ export function startRepairMini(comp: Comp, action: Action, onDone: (redo: numbe
     if (comp.id === 'dial') steps.push({ kind: 'route', label: '점선을 따라 풀리에 실을 차례로 걸자' });
     else if (comp.id === 'escape') steps.push({ kind: 'beat', label: '앵커를 굽혀 똑·딱 간격을 같게 맞추자' });
     else if (comp.id === 'train') steps.push({ kind: 'bend', label: '휜 톱니를 펜치로 끌어 기준선에 맞추자' });
+    else if (comp.id === 'thermo') steps.push({ kind: 'bend', label: '붙은 접점을 펜치로 떼어 간격을 기준선에 맞추자' });
     else steps.push({ kind: 'tap', label: '망치로 고정 핀을 톡톡 박자' });
   } else if (comp.shape === 'bulb') steps.push({ kind: 'twistOut', label: '헌 전구를 반시계로 돌려 빼자', n: 2 }, { kind: 'insert', label: '새 전구를 소켓에 끼우자' }, { kind: 'twistIn', label: '시계 방향으로 돌려 조이자', n: 2 });
   else if (comp.id === 'cord') steps.push({ kind: 'strip', label: '스트리퍼로 피복을 표시선까지 벗기자' }, { kind: 'twistIn', label: '단자에 감고 나사를 시계 방향으로 조이자', n: 1 });
@@ -84,7 +88,7 @@ function initStep() {
   const s = m.steps[m.i];
   const d: Record<string, any> = (m.d = {});
   switch (s.kind) {
-    case 'unscrew': {
+    case 'unscrew': case 'screwIn': {
       const n = s.n ?? 4;
       d.screws = Array.from({ length: n }, (_, i) => {
         const a = (i / n) * Math.PI * 2 - Math.PI / 2 + (n === 2 ? Math.PI / 2 : Math.PI / n);
@@ -95,7 +99,14 @@ function initStep() {
     case 'twistOut': case 'twistIn': d.p = 0; d.rot = 0; break;
     case 'desolder': case 'solder': d.heat = 0; d.phase = 'heat'; d.blob = 0; break;
     case 'pull': d.dy = 0; break;
-    case 'insert': d.pos = [CX + 190, CY + 10]; break;
+    case 'insert': {
+      const specs = specsOf(m.comp);
+      d.need = specs[0];
+      d.cands = specs.map((spec, i) => ({ spec, pos: [CX + 195, CY - 48 + i * 46] as [number, number], home: [CX + 195, CY - 48 + i * 46] as [number, number] }));
+      d.cands.sort(() => Math.random() - 0.5);
+      d.cands.forEach((c: any, i: number) => { c.home = [CX + 195, CY - 48 + i * 46]; c.pos = [...c.home]; });
+      break;
+    }
     case 'strip': d.x = CX + 150; break;
     case 'spray': d.amount = 0; break;
     case 'scrub': d.dots = Array.from({ length: 22 }, (_, i) => ({ x: CX - 70 + ((i * 37) % 140), y: CY - 40 + ((i * 53) % 80), on: true })); break;
@@ -190,32 +201,8 @@ function brushAt(p: Painter, x: number, y: number) { p.box(x - 8, y - 6, 16, 6, 
 
 /* ---------- 단계별 미니게임 ---------- */
 const STEP_DRAW: Record<StepKind, Drawer> = {
-  unscrew(p, t, m) {
-    const d = m.d;
-    p.box(CX - 170, CY - 84, 340, 168, '#47392d', '#1c140e');
-    p.rect(CX - 168, CY - 82, 336, 2, '#5e4c3c');
-    p.label('덮개', CX, CY - 8, 12, '#d8c6a4');
-    // 나사 접시
-    p.disc(CX + 250, CY + 70, 34, '#8d9297'); p.disc(CX + 250, CY + 70, 28, '#a9b0b4');
-    let outN = 0;
-    d.screws.forEach((sc: any, i: number) => {
-      if (sc.out) { outN++; const tx = CX + 236 + (outN % 3) * 12, ty = CY + 62 + Math.floor(outN / 3) * 10; p.disc(tx, ty, 5, '#d0d4d8'); p.rect(tx - 3, ty, 6, 1, '#555'); return; }
-      const lift = sc.p * 6;
-      p.disc(sc.x + 2, sc.y + 2 + lift / 2, 13, 'rgba(0,0,0,0.4)');
-      p.disc(sc.x, sc.y - lift, 12, '#c9cfd3'); p.ring(sc.x, sc.y - lift, 12, '#5b6064');
-      const a = sc.rot;
-      p.line(sc.x - Math.cos(a) * 8, sc.y - lift - Math.sin(a) * 8, sc.x + Math.cos(a) * 8, sc.y - lift + Math.sin(a) * 8, '#3a3e41', 2);
-      p.line(sc.x - Math.cos(a + 1.57) * 8, sc.y - lift - Math.sin(a + 1.57) * 8, sc.x + Math.cos(a + 1.57) * 8, sc.y - lift + Math.sin(a + 1.57) * 8, '#3a3e41', 2);
-      if (sc.p > 0) { p.rect(sc.x - 14, sc.y + 16, 28, 4, '#3a4a40'); p.rect(sc.x - 14, sc.y + 16, 28 * sc.p, 4, C.gold); }
-      arrowRing(p, sc.x, sc.y, 30, -1, t);
-      rotary(i === d.screws.findIndex((s2: any) => !s2.out) ? 'mini-focus' : 'mini-screw' + i, sc.x, sc.y, 34, -1, 1.5, () => sc.p, v => { sc.rot -= (v - sc.p) * 9; sc.p = v; }, () => {
-        sc.out = true; sfx('screwOut');
-        if (d.screws.every((s2: any) => s2.out)) { say('나사를 다 풀었다'); next(); }
-      });
-    });
-    const [mx, my] = ui.mouse;
-    driverAt(p, mx, my);
-  },
+  unscrew(p, t, m) { screws(p, t, m, -1); },
+  screwIn(p, t, m) { screws(p, t, m, 1); },
   twistOut(p, t, m, s) { twist(p, t, m, s, -1); },
   twistIn(p, t, m, s) { twist(p, t, m, s, 1); },
   desolder(p, t, m, s) { board(p, t, m, s, true); },
@@ -236,21 +223,32 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     const pulse = Math.sin(t * 6) > 0;
     p.rect(slot.x, slot.y, slot.w, 1, pulse ? C.gold : '#8a6a1f'); p.rect(slot.x, slot.y + slot.h, slot.w, 1, pulse ? C.gold : '#8a6a1f');
     p.rect(slot.x, slot.y, 1, slot.h, pulse ? C.gold : '#8a6a1f'); p.rect(slot.x + slot.w, slot.y, 1, slot.h, pulse ? C.gold : '#8a6a1f');
-    p.box(CX + 140, CY - 40, 110, 110, '#5b4330', '#2b1a0e'); p.label('새 부품', CX + 195, CY + 72, 10, C.cream);
-    const [px, py] = d.pos;
-    const r = { x: px - 40, y: py - 36, w: 80, h: 72 };
-    drawPart(p, m.comp, r, {}, ctx0, 0);
-    let off = [0, 0];
-    region({
-      id: 'mini-focus', ...r,
-      down: (x, y) => { off = [x - px, y - py]; },
-      drag: (x, y) => { d.pos = [x - off[0], y - off[1]]; },
-      up: () => {
-        const [qx, qy] = d.pos;
-        if (Math.abs(qx - CX) < 18 && Math.abs(qy - (CY - 25)) < 18) { d.pos = [CX, CY - 25]; say('딱 맞게 들어갔다', false, 'snap'); next(); }
-        else if (Math.abs(qx - CX) < 70 && Math.abs(qy - (CY - 25)) < 70) say('구멍이 안 맞는다. 조금 더 정확히', true);
-      },
-    });
+    // 헌 부품에 적혀 있던 규격
+    p.panel(CX - 160, CY - 60, 90, 44, C.paper);
+    p.text('헌 부품 표시', CX - 115, CY - 56, 9, '#5b5644', 'center', 700);
+    p.text(d.need, CX - 115, CY - 42, 13, C.ink, 'center', 700);
+    p.box(CX + 140, CY - 74, 112, 146, '#5b4330', '#2b1a0e'); p.label('부품 서랍', CX + 196, CY + 74, 10, C.cream);
+    for (const c of d.cands) {
+      const [px, py] = c.pos;
+      const r = { x: px - 26, y: py - 20, w: 52, h: 34 };
+      drawPart(p, m.comp, r, {}, ctx0, 0);
+      p.label(c.spec, px, py + 13, 9, C.gold);
+      let off = [0, 0];
+      region({
+        id: c.spec === d.need ? 'mini-focus' : 'mini-cand-' + c.spec, ...r,
+        down: (x, y) => { off = [x - c.pos[0], y - c.pos[1]]; },
+        drag: (x, y) => { c.pos = [x - off[0], y - off[1]]; },
+        up: () => {
+          const [qx, qy] = c.pos;
+          const near = Math.abs(qx - CX) < 40 && Math.abs(qy - (CY - 25)) < 40;
+          if (near && c.spec !== d.need) { say(`규격이 다르다! (${c.spec} ≠ ${d.need})`, true); c.pos = [...c.home]; return; }
+          if (near && Math.abs(qx - CX) < 18 && Math.abs(qy - (CY - 25)) < 18) { c.pos = [CX, CY - 25]; say('딱 맞게 들어갔다', false, 'snap'); next(); return; }
+          if (near) say('구멍이 안 맞는다. 조금 더 정확히', true);
+          else c.pos = [...c.home];
+        },
+      });
+    }
+    void t;
   },
   strip(p, _t, m) {
     const d = m.d;
@@ -365,8 +363,10 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
   bend(p, _t, m) {
     const d = m.d;
     const gx = CX, gy = CY + 14, r = 62;
-    p.disc(gx, gy, r, C.brass); p.ring(gx, gy, r, '#6d5214', 2); p.disc(gx, gy, 14, C.cream);
-    for (let i = 0; i < 20; i++) {
+    const strip = m.comp.id === 'thermo';
+    if (strip) { p.box(gx - 90, gy - 10, 100, 20, '#3d3b37', '#1b1a18'); p.disc(gx, gy, 10, '#e0e0e0'); }
+    else { p.disc(gx, gy, r, C.brass); p.ring(gx, gy, r, '#6d5214', 2); p.disc(gx, gy, 14, C.cream); }
+    for (let i = 0; i < (strip ? 1 : 20); i++) {
       const a = (i / 20) * Math.PI * 2 - Math.PI / 2;
       const bent = i === 0 ? (d.angle * Math.PI) / 180 : 0;
       p.line(gx + Math.cos(a) * r, gy + Math.sin(a) * r, gx + Math.cos(a + bent) * (r + 14), gy + Math.sin(a + bent) * (r + 14), i === 0 ? C.red : '#b08a37', 5);
@@ -431,6 +431,35 @@ function twist(p: Painter, t: number, m: Mini, s: Step, dir: number) {
   arrowRing(p, CX, CY - 30, 80, dir, t);
   p.label(dir < 0 ? '↺ 반시계로 돌려 빼기' : '↻ 시계 방향으로 돌려 조이기', CX, CY + 80, 11, C.gold);
   rotary('mini-focus', CX, CY - 30, 100, dir, s.n ?? 2, () => d.p, v => { d.rot += (v - d.p) * dir * 10; d.p = v; }, () => { say(dir < 0 ? '쏙 빠졌다' : '꽉 조였다'); next(); });
+}
+
+/** 덮개 나사: dir -1 풀기, +1 조이기 */
+function screws(p: Painter, t: number, m: Mini, dir: number) {
+  const d = m.d;
+    p.box(CX - 170, CY - 84, 340, 168, '#47392d', '#1c140e');
+    p.rect(CX - 168, CY - 82, 336, 2, '#5e4c3c');
+    p.label('덮개', CX, CY - 8, 12, '#d8c6a4');
+    // 나사 접시
+    p.disc(CX + 250, CY - 10, 34, '#8d9297'); p.disc(CX + 250, CY - 10, 28, '#a9b0b4');
+    let outN = 0;
+    d.screws.forEach((sc: any, i: number) => {
+      if (sc.out && dir > 0) { p.disc(sc.x, sc.y, 12, '#c9cfd3'); p.ring(sc.x, sc.y, 12, '#5b6064'); p.line(sc.x - 8, sc.y, sc.x + 8, sc.y, '#3a3e41', 2); p.line(sc.x, sc.y - 8, sc.x, sc.y + 8, '#3a3e41', 2); p.label('✓', sc.x, sc.y - 26, 10, C.ok); return; }
+      if (sc.out) { outN++; const tx = CX + 236 + (outN % 3) * 12, ty = CY - 18 + Math.floor(outN / 3) * 10; p.disc(tx, ty, 5, '#d0d4d8'); p.rect(tx - 3, ty, 6, 1, '#555'); return; }
+      const lift = (dir < 0 ? sc.p : 1 - sc.p) * 6;
+      p.disc(sc.x + 2, sc.y + 2 + lift / 2, 13, 'rgba(0,0,0,0.4)');
+      p.disc(sc.x, sc.y - lift, 12, '#c9cfd3'); p.ring(sc.x, sc.y - lift, 12, '#5b6064');
+      const a = sc.rot;
+      p.line(sc.x - Math.cos(a) * 8, sc.y - lift - Math.sin(a) * 8, sc.x + Math.cos(a) * 8, sc.y - lift + Math.sin(a) * 8, '#3a3e41', 2);
+      p.line(sc.x - Math.cos(a + 1.57) * 8, sc.y - lift - Math.sin(a + 1.57) * 8, sc.x + Math.cos(a + 1.57) * 8, sc.y - lift + Math.sin(a + 1.57) * 8, '#3a3e41', 2);
+      if (sc.p > 0) { p.rect(sc.x - 14, sc.y + 16, 28, 4, '#3a4a40'); p.rect(sc.x - 14, sc.y + 16, 28 * sc.p, 4, C.gold); }
+      arrowRing(p, sc.x, sc.y, 30, dir, t);
+      rotary(i === d.screws.findIndex((s2: any) => !s2.out) ? 'mini-focus' : 'mini-screw' + i, sc.x, sc.y, 34, dir, dir < 0 ? 1.5 : 1, () => sc.p, v => { sc.rot += (v - sc.p) * 9 * dir; sc.p = v; }, () => {
+        sc.out = true; sfx(dir < 0 ? 'screwOut' : 'snap');
+        if (d.screws.every((s2: any) => s2.out)) { say(dir < 0 ? '나사를 다 풀었다' : '꽉 조였다'); next(); }
+      });
+    });
+    const [mx, my] = ui.mouse;
+    driverAt(p, mx, my);
 }
 
 /** 기판 위 다리 두 개: 납 빼기 / 납땜 */
@@ -519,4 +548,18 @@ function board(p: Painter, t: number, m: Mini, s: Step, desolder: boolean) {
       },
     });
   }
+}
+
+/** 부품 규격: 첫 번째가 맞는 것, 나머지는 서랍 속 비슷한 부품 */
+function specsOf(c: Comp): string[] {
+  const table: Record<string, string[]> = {
+    bulb: ['60W', '100W', '25W'], fuse: ['1A', '5A', '0.3A'], tfuse: ['115℃', '150℃', '90℃'], cap: ['1.5µF', '4µF', '0.47µF'],
+    fcap: ['40µF 350V', '40µF 16V', '4µF 350V'], outtube: ['6AR5', '6V6', '12AX7'], speaker: ['3Ω', '8Ω', '16Ω'], pot: ['500kΩ', '5kΩ', '50kΩ'],
+    switch: ['250V 3A', '12V 1A', '250V 15A'], roller: ['Ø10', 'Ø8', 'Ø12'], barrel: ['8일 태엽', '1일 태엽', '30시간'], susp: ['0.1mm', '0.3mm', '0.05mm'],
+    bearing: ['Ø6', 'Ø8', 'Ø4'], belt: ['Ø60', 'Ø45', 'Ø80'], cord: ['0.75㎟', '0.3㎟', '1.5㎟'],
+    element: ['600W', '1200W', '300W'], thermo: ['바이메탈', '서미스터', '리드 스위치'], neon: ['네온 220V', 'LED 12V', '꼬마전구 6V'],
+    ringer: ['1kΩ 코일', '10Ω 코일', '100kΩ 코일'], mic: ['카본', '다이내믹', '크리스털'], hook: ['3접점', '2접점', '5접점'],
+  };
+  if (c.id === 'motor') return c.ohm === 12 ? ['DC 6V', 'DC 12V', 'DC 3V'] : ['AC 220V', 'AC 110V', 'DC 12V'];
+  return table[c.id] ?? ['정품', '유사품 A', '유사품 B'];
 }

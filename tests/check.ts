@@ -69,6 +69,8 @@ for (let seed = 1; seed <= 40; seed++) {
   const state = newGame(seed);
   state.money = 500000;
   state.tools = ['loupe', 'inject'];
+  state.level = 4;
+  state.unlocked = Object.fromEntries(ITEMS.map(i => [i.id, 1]));
   for (let day = 1; day <= 10; day++) {
     for (const job of [...state.jobs]) {
       state.active = job.id;

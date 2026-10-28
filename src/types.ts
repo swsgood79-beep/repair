@@ -6,14 +6,15 @@ export type ToolId = 'hand' | 'driver' | 'look' | 'loupe' | 'tester' | 'volt' | 
 export type Shape =
   | 'plug' | 'cord' | 'switch' | 'keys' | 'fuse' | 'xfmr' | 'cap' | 'tube' | 'pot' | 'speaker'
   | 'bulb' | 'socket' | 'joint' | 'motor' | 'belt' | 'bearing' | 'blade' | 'gear'
-  | 'spring' | 'pendulum' | 'escape' | 'head' | 'battery' | 'roller' | 'board' | 'dial' | 'hands' | 'barrel';
+  | 'spring' | 'pendulum' | 'escape' | 'head' | 'battery' | 'roller' | 'board' | 'dial' | 'hands' | 'barrel'
+  | 'sole' | 'element' | 'thermo' | 'neon' | 'handset' | 'bell' | 'rotary' | 'mic';
 
 /** 눈·돋보기로 보았을 때 확대 그림에 그려지는 흠 */
 export type Mark =
   | 'filament' | 'rust' | 'soot' | 'bulge' | 'leak' | 'crack' | 'dryoil' | 'burnt' | 'slack' | 'snapped'
   | 'torn' | 'glazed' | 'powder' | 'kink' | 'bent' | 'pin' | 'dirty' | 'faded' | 'frayed' | 'offtrack' | 'gummy';
 
-export type Sound = 'hum' | 'loudhum' | 'squeal' | 'crackle' | 'buzz' | 'whirr' | 'spin' | 'music' | 'muffled' | 'static' | 'tick' | 'limp' | 'catch' | 'drag' | 'slip' | 'quiet';
+export type Sound = 'hum' | 'loudhum' | 'squeal' | 'crackle' | 'buzz' | 'whirr' | 'spin' | 'music' | 'muffled' | 'static' | 'tick' | 'limp' | 'catch' | 'drag' | 'slip' | 'quiet' | 'dialtone' | 'ring' | 'click';
 
 export type Feel = 'smooth' | 'stiff' | 'sticky' | 'catch' | 'free' | 'loose' | 'soft' | 'hard' | 'firm' | 'slack' | 'mushy' | 'crisp' | 'tight';
 
@@ -109,6 +110,9 @@ export interface FX {
   pointer?: number;
   hands?: boolean;
   jam?: boolean;
+  /** 전화 신호음 · 벨 */
+  dial?: number;
+  ring?: number;
 }
 
 export interface Sim {
@@ -214,4 +218,8 @@ export interface GameState {
   sound: boolean;
   /** 배경음악 (없으면 켬) */
   music?: boolean;
+  /** 가게 단계 (1~4) */
+  level?: number;
+  /** 물건별로 고칠 수 있게 된 날 */
+  unlocked?: Record<string, number>;
 }

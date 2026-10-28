@@ -4,8 +4,10 @@ import { fan } from './fan';
 import { radio } from './radio';
 import { cassette } from './cassette';
 import { clock } from './clock';
+import { iron } from './iron';
+import { phone } from './phone';
 
-export const ITEMS: ItemDef[] = [lamp, fan, radio, cassette, clock];
+export const ITEMS: ItemDef[] = [lamp, fan, radio, cassette, clock, iron, phone];
 
 export function item(id: string): ItemDef {
   const found = ITEMS.find(i => i.id === id);
