@@ -32,7 +32,7 @@ export function newGame(seed = Date.now()): GameState {
     version: 2, seed: seed | 0, day: 1, minute: 0, money: 30000, debt: START_DEBT, trust: 3,
     jobs: [], active: null, tools: [], casebook: [], arrivals: [],
     summary: { day: 1, income: 0, parts: 0, expenses: 0, returned: 0, lost: 0 },
-    history: [], pending: [], ending: null, endless: false, tutorial: 0, nextId: 1, sound: false,
+    history: [], pending: [], ending: null, endless: false, tutorial: 0, nextId: 1, sound: true, music: true,
   };
   const first = makeJob(state, 'lamp', ['bulb_open'], 1);
   const second = makeJob(state, 'fan', ['cap_dead'], 0);

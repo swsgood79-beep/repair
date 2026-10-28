@@ -5,7 +5,7 @@ import {
   DAILY_COST, DEADLINE, START_DEBT, TOOL_SHOP, activeJob, buyTool, casebookEntries, clearSave, clockText, continueEndless,
   customerOf, endDay, handBack, newGame, payDebt, save, startDay, timeLeft, won,
 } from '../game';
-import { setSound, sfx } from '../audio';
+import { setAudioPrefs, sfx } from '../audio';
 import { button, dim, holder, region, toast, ui, type Overlay } from './core';
 import type { DayReport } from '../game';
 import { drawCloseup } from '../gfx/parts';
@@ -74,6 +74,7 @@ function startNew() {
 }
 
 /* ---------- 카운터: 손님 맞이와 돌려주기 ---------- */
+let lastBell = '';
 export function drawCounter(p: Painter, t: number) {
   const cnt = ui.counter;
   shopRoom(p, t);
@@ -83,6 +84,8 @@ export function drawCounter(p: Painter, t: number) {
     const job = state.jobs.find(j => j.id === cnt.ids[cnt.i]) ?? state.pending.find(j => j.id === cnt.ids[cnt.i]);
     if (!job) { ui.counter = null; ui.scene = 'bench'; return; }
     const cu = customerOf(job);
+    const bellKey = `${job.id}`;
+    if (lastBell !== bellKey) { lastBell = bellKey; sfx('doorbell'); }
     drawCustomer(p, cu, 150, 118, job.comeback ? 'angry' : 'worried', t);
     counterTop(p);
     drawItemIcon(p, job.itemId, 200, 214, 2);
@@ -180,7 +183,7 @@ export function drawHud(p: Painter) {
   };
   small('hud-shop', '장부', () => { ui.overlay = { kind: 'shop' }; }, 0);
   small('hud-book', '도감', () => { ui.overlay = { kind: 'book', page: 0 }; }, 1);
-  small('hud-sound', s.sound ? '♪' : '♪×', () => { s.sound = !s.sound; setSound(s.sound); save(s); }, 2);
+  small('hud-sound', (s.music ?? true) ? '♪' : '♪×', () => { s.music = !(s.music ?? true); setAudioPrefs(s.music, s.sound); save(s); }, 2);
   small('hud-menu', '≡', () => { ui.overlay = { kind: 'menu' }; }, 3);
 }
 
@@ -218,7 +221,7 @@ export function drawOverlay(p: Painter, t: number) {
     p.text(`가겟세·재료비 ${won(DAILY_COST)}이 나간다`, 320, 144, 11, C.ink, 'center', 700);
     if (due.length) p.text(`오늘 마감인 물건 ${due.length}점은 못 고친 채 손님이 가져간다 (신뢰 −)`, 320, 164, 10, C.red, 'center', 700);
     button(p, 'c-no', 180, 206, 130, 30, '더 일한다', close, { size: 12 });
-    button(p, 'c-yes', 330, 206, 130, 30, '마감', () => { const report = endDay(s); ui.overlay = { kind: 'day', report }; save(s); sfx('click'); }, { kind: 'primary', size: 12 });
+    button(p, 'c-yes', 330, 206, 130, 30, '마감', () => { const report = endDay(s); ui.overlay = { kind: 'day', report }; save(s); sfx('shutter'); }, { kind: 'primary', size: 12 });
   } else if (ov.kind === 'giveup') {
     p.panel(150, 110, 340, 130, C.paper);
     p.text('수리를 포기할까?', 320, 122, 18, C.ink, 'center', 400, 'sign');
@@ -268,18 +271,20 @@ export function drawOverlay(p: Painter, t: number) {
       p.text(`${tool.name}  ${won(tool.price)}`, 180, y + 7, 12, C.ink, 'left', 700);
       p.text(tool.desc, 180, y + 25, 9, '#5b5644');
       const owned = s.tools.includes(tool.id), early = s.day < tool.day;
-      button(p, 'buy-' + tool.id, 430, y + 10, 72, 26, owned ? '보유' : early ? `${tool.day}일차` : '사기', () => { const r = buyTool(s, tool.id); toast(r.text, !r.ok); if (r.ok) sfx('coin'); save(s); }, { disabled: owned || early, kind: owned ? 'quiet' : 'primary', size: 11 });
+      button(p, 'buy-' + tool.id, 430, y + 10, 72, 26, owned ? '보유' : early ? `${tool.day}일차` : '사기', () => { const r = buyTool(s, tool.id); toast(r.text, !r.ok); if (r.ok) sfx('register'); save(s); }, { disabled: owned || early, kind: owned ? 'quiet' : 'primary', size: 11 });
     });
     button(p, 'shop-x', 260, 300, 120, 24, '닫기', () => { ui.overlay = ov2day(); }, { size: 11 });
     if (ui.toast && t - ui.toast.t0 < 2.4) p.text(ui.toast.text, 320, 284, 10, ui.toast.bad ? C.red : '#1f5a1f', 'center', 700);
   } else if (ov.kind === 'book') {
     drawBook(p, ov);
   } else if (ov.kind === 'menu') {
-    p.panel(200, 100, 240, 150, C.paper);
-    p.text('메뉴', 320, 110, 18, C.ink, 'center', 400, 'sign');
-    button(p, 'm-title', 230, 140, 180, 26, '처음 화면으로', () => { ui.overlay = null; ui.scene = 'title'; save(s); }, { size: 11 });
-    button(p, 'm-tut', 230, 172, 180, 26, holder.state.tutorial >= 0 ? '안내 끄기' : '안내 다시 보기', () => { holder.state.tutorial = holder.state.tutorial >= 0 ? -1 : 0; ui.overlay = null; }, { size: 11 });
-    button(p, 'm-x', 230, 210, 180, 26, '닫기', close, { kind: 'primary', size: 11 });
+    p.panel(200, 80, 240, 200, C.paper);
+    p.text('메뉴', 320, 90, 18, C.ink, 'center', 400, 'sign');
+    button(p, 'm-music', 230, 120, 180, 26, `배경음악  ${(s.music ?? true) ? '켬' : '끔'}`, () => { s.music = !(s.music ?? true); setAudioPrefs(s.music, s.sound); save(s); }, { size: 11, kind: (s.music ?? true) ? 'on' : undefined });
+    button(p, 'm-sfx', 230, 152, 180, 26, `효과음  ${s.sound ? '켬' : '끔'}`, () => { s.sound = !s.sound; setAudioPrefs(s.music ?? true, s.sound); save(s); sfx('click'); }, { size: 11, kind: s.sound ? 'on' : undefined });
+    button(p, 'm-title', 230, 184, 180, 26, '처음 화면으로', () => { ui.overlay = null; ui.scene = 'title'; save(s); }, { size: 11 });
+    button(p, 'm-tut', 230, 216, 180, 26, holder.state.tutorial >= 0 ? '안내 끄기' : '안내 다시 보기', () => { holder.state.tutorial = holder.state.tutorial >= 0 ? -1 : 0; ui.overlay = null; }, { size: 11 });
+    button(p, 'm-x', 230, 248, 180, 24, '닫기', close, { kind: 'primary', size: 11 });
   }
 }
 
@@ -293,6 +298,7 @@ function nextDay() {
   lastReport = null;
   if (s.ending) { ui.scene = 'ending'; save(s); return; }
   startDay(s);
+  sfx('morning');
   ui.meter = null; ui.popups = [];
   ui.counter = { kind: 'arrivals', ids: s.arrivals, i: 0 };
   ui.scene = 'counter';

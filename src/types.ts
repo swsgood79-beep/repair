@@ -212,4 +212,6 @@ export interface GameState {
   tutorial: number;
   nextId: number;
   sound: boolean;
+  /** 배경음악 (없으면 켬) */
+  music?: boolean;
 }

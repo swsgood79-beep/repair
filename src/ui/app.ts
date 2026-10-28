@@ -1,11 +1,11 @@
 import { Painter, W, H } from '../gfx/painter';
 import { load, newGame, save } from '../game';
-import { setSound, updateSound } from '../audio';
+import { playMusic, setAudioPrefs, setLoop, unlockAudio, updateSound } from '../audio';
 import { holder, hit, resetRegions, ui, type Region } from './core';
 import { drawAccuse, drawBench } from './bench';
 import { drawCounter, drawEnding, drawHud, drawOverlay, drawTitle } from './scenes';
 import { drawTutorial } from './tutorial';
-import { drawMini } from './mini';
+import { drawMini, miniActive } from './mini';
 import { activeJob, simulate } from '../game';
 
 let painter: Painter;
@@ -42,7 +42,8 @@ export function start(root: HTMLElement) {
   };
   txt.addEventListener('pointerdown', e => {
     e.preventDefault();
-    if (holder.state.sound) setSound(true);
+    unlockAudio();
+    setAudioPrefs(holder.state.music ?? true, holder.state.sound);
     const [x, y] = toLocal(e);
     ui.mouse = [x, y];
     const r = hit(x, y);
@@ -104,5 +105,8 @@ function frame(t: number) {
   }
   if (ui.scene === 'counter') drawHud(p);
   drawOverlay(p, t);
-  updateSound(holder.state.sound && ui.scene === 'bench' ? fx : {});
+  updateSound(ui.scene === 'bench' && !miniActive() ? fx : {});
+  if (!miniActive()) { setLoop('sizzle', 0); setLoop('spray', 0); }
+  const s = holder.state;
+  playMusic(ui.scene === 'title' ? 'title' : ui.scene === 'counter' ? 'counter' : ui.scene === 'ending' ? (s.ending === 'kept' ? 'kept' : 'lost') : miniActive() ? 'mini' : 'bench');
 }

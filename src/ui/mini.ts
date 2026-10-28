@@ -1,7 +1,7 @@
 import type { Action, Comp } from '../types';
 import { C, Painter } from '../gfx/painter';
 import { drawPart } from '../gfx/parts';
-import { sfx } from '../audio';
+import { setLoop, sfx, type Sfx } from '../audio';
 import { button, region, ui } from './core';
 
 /**
@@ -61,15 +61,19 @@ function begin(m: Omit<Mini, 'i' | 'd' | 'msg' | 'msgBad' | 'msgT' | 'redo'>) {
   initStep();
 }
 
-function say(text: string, bad = false) {
+function say(text: string, bad = false, sound?: Sfx) {
   if (!mini) return;
   mini.msg = text; mini.msgBad = bad; mini.msgT = ui.now;
-  if (bad) { mini.redo++; sfx('bad', 0.5); }
+  if (bad) mini.redo++;
+  if (sound) sfx(sound); else if (bad) sfx('bad', 0.5);
 }
+
+/** 이번 프레임의 계속 나는 소리 크기 */
+const loop = { sizzle: 0, spray: 0 };
 
 function next() {
   if (!mini) return;
-  sfx('good', 0.6);
+  sfx('good', 0.5);
   mini.i++;
   if (mini.i >= mini.steps.length) { mini.doneT = ui.now; return; }
   initStep();
@@ -122,6 +126,7 @@ export function drawMini(p: Painter, t: number) {
   m.steps.forEach((_, i) => p.disc(A.x + A.w - 90 + i * 12, A.y + 12, 4, i < m.i ? C.ok : i === m.i ? C.gold : '#3a4a40'));
   if (m.doneT) {
     const age = t - m.doneT;
+    if (!m.d.chimed) { m.d.chimed = true; sfx('chime'); setLoop('sizzle', 0); setLoop('spray', 0); }
     p.text('작업 끝!', CX, CY - 20, 26, C.ok, 'center', 400, 'sign');
     for (let i = 0; i < 12; i++) { const a = i * 0.52 + age * 2; p.rect(CX + Math.cos(a) * (40 + age * 80), CY + Math.sin(a) * (24 + age * 50), 3, 3, i % 2 ? C.glow : C.ok); }
     if (age > 0.8) { const done = m.onDone, redo = m.redo; mini = null; done(redo); }
@@ -133,7 +138,9 @@ export function drawMini(p: Painter, t: number) {
   p.text(`${m.i + 1}/${m.steps.length}  ${s.label}`, A.x + 18, A.y + 34, 11, C.ink, 'left', 700);
   if (fresh) p.text(m.msg, A.x + A.w - 18, A.y + 34, 12, m.msgBad ? '#7a1a0a' : '#1f5a1f', 'right', 700);
   if (m.onCancel) button(p, 'mini-x', A.x + A.w - 64, A.y + A.h - 30, 56, 22, '그만두기', () => { const c = m.onCancel!; mini = null; c(); }, { kind: 'quiet', size: 10 });
+  loop.sizzle = 0; loop.spray = 0;
   STEP_DRAW[s.kind](p, t, m, s);
+  setLoop('sizzle', loop.sizzle); setLoop('spray', loop.spray);
 }
 
 type Drawer = (p: Painter, t: number, m: Mini, s: Step) => void;
@@ -152,9 +159,9 @@ function rotary(id: string, cx: number, cy: number, r: number, dir: number, turn
       const a = angleOf(x, y, cx, cy);
       const delta = wrap(a - last);
       last = a;
-      if (Math.abs(delta) > 1.1) { set(Math.max(0, get() - 0.06)); say('미끄덩! 천천히 돌려요', true); last = null; return; }
+      if (Math.abs(delta) > 1.1) { set(Math.max(0, get() - 0.06)); say('미끄덩! 천천히 돌려요', true, 'slip'); last = null; return; }
       const gain = (delta * dir) / (Math.PI * 2 * turns);
-      if (gain > 0) { set(Math.min(1, get() + gain)); if (Math.random() < 0.15) sfx('click', 0.25); }
+      if (gain > 0) { set(Math.min(1, get() + gain)); if (Math.random() < 0.3) sfx('ratchet', 0.8); }
       if (get() >= 1) { last = null; onFull(); }
     },
     up: () => { last = null; },
@@ -202,7 +209,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
       if (sc.p > 0) { p.rect(sc.x - 14, sc.y + 16, 28, 4, '#3a4a40'); p.rect(sc.x - 14, sc.y + 16, 28 * sc.p, 4, C.gold); }
       arrowRing(p, sc.x, sc.y, 30, -1, t);
       rotary(i === d.screws.findIndex((s2: any) => !s2.out) ? 'mini-focus' : 'mini-screw' + i, sc.x, sc.y, 34, -1, 1.5, () => sc.p, v => { sc.rot -= (v - sc.p) * 9; sc.p = v; }, () => {
-        sc.out = true; sfx('pop');
+        sc.out = true; sfx('screwOut');
         if (d.screws.every((s2: any) => s2.out)) { say('나사를 다 풀었다'); next(); }
       });
     });
@@ -220,7 +227,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     drawPart(p, m.comp, r, {}, ctx0, 0);
     p.label('↑ 위로 끌어올리기', CX, CY + 40, 11, C.gold);
     let y0 = 0;
-    region({ id: 'mini-focus', ...r, down: (_x, y) => { y0 = y + d.dy; }, drag: (_x, y) => { d.dy = Math.max(0, y0 - y); if (d.dy > 90) { say('빠졌다!'); next(); } }, up: () => { if (d.dy <= 90) d.dy = 0; } });
+    region({ id: 'mini-focus', ...r, down: (_x, y) => { y0 = y + d.dy; }, drag: (_x, y) => { d.dy = Math.max(0, y0 - y); if (Math.random() < 0.08) sfx('creak', 0.4); if (d.dy > 90) { say('빠졌다!', false, 'snap'); next(); } }, up: () => { if (d.dy <= 90) d.dy = 0; } });
   },
   insert(p, t, m) {
     const d = m.d;
@@ -240,7 +247,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
       drag: (x, y) => { d.pos = [x - off[0], y - off[1]]; },
       up: () => {
         const [qx, qy] = d.pos;
-        if (Math.abs(qx - CX) < 18 && Math.abs(qy - (CY - 25)) < 18) { d.pos = [CX, CY - 25]; sfx('pop'); say('딱 맞게 들어갔다'); next(); }
+        if (Math.abs(qx - CX) < 18 && Math.abs(qy - (CY - 25)) < 18) { d.pos = [CX, CY - 25]; say('딱 맞게 들어갔다', false, 'snap'); next(); }
         else if (Math.abs(qx - CX) < 70 && Math.abs(qy - (CY - 25)) < 70) say('구멍이 안 맞는다. 조금 더 정확히', true);
       },
     });
@@ -262,8 +269,8 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
       down: (x) => { start = x - d.x; },
       drag: (x) => { d.x = Math.max(CX - 200, Math.min(CX + 200, x - start)); },
       up: () => {
-        if (Math.abs(d.x - target) < 8) { say('딱 알맞게 벗겼다'); next(); }
-        else if (d.x < target - 8) { say('너무 많이 벗겼다! 잘라 내고 다시', true); d.x = CX + 150; }
+        if (Math.abs(d.x - target) < 8) { say('딱 알맞게 벗겼다', false, 'scrape'); next(); }
+        else if (d.x < target - 8) { say('너무 많이 벗겼다! 잘라 내고 다시', true, 'scrape'); d.x = CX + 150; }
         else say('피복이 아직 남았다. 더 왼쪽으로', true);
       },
     });
@@ -276,6 +283,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     p.box(can.x + 12, can.y - 12, 16, 12, '#c9c9c9');
     if (d.holding) {
       d.amount = Math.min(1, d.amount + 0.02);
+      loop.spray = 1;
       for (let i = 0; i < 14; i++) p.rect(can.x - 10 - ((t * 200 + i * 23) % 140), can.y - 4 + Math.sin(i * 1.3 + t * 9) * 16, 2, 2, 'rgba(220,240,245,0.7)');
       if (d.amount >= 1) { d.holding = false; say('골고루 뿌렸다'); next(); }
     }
@@ -294,7 +302,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     region({
       id: 'mini-focus', x: CX - 100, y: CY - 70, w: 200, h: 140,
       drag: (x, y) => {
-        for (const dot of d.dots) if (dot.on && Math.abs(dot.x - x) < 12 && Math.abs(dot.y - y) < 10) { dot.on = false; if (Math.random() < 0.3) sfx('click', 0.2); }
+        for (const dot of d.dots) if (dot.on && Math.abs(dot.x - x) < 12 && Math.abs(dot.y - y) < 10) { dot.on = false; sfx('brush'); }
         if (d.dots.every((x2: any) => !x2.on)) { say('반짝반짝해졌다'); next(); }
       },
       down: () => {},
@@ -316,13 +324,13 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
       p.disc(d.falling.x, y, 3, '#e8b84a');
       if (y >= CY + 20) {
         const hit = Math.abs(d.falling.x - holeX) < 11;
-        if (hit) { d.hits++; sfx('pop'); say(`쏙! ${d.hits}/3`); if (d.hits >= 3) next(); }
+        if (hit) { d.hits++; say(`쏙! ${d.hits}/3`, false, 'drop'); if (d.hits >= 3) next(); }
         else { d.puddles.push(d.falling.x); say('빗나갔다. 구멍을 노려요', true); }
         d.falling = null;
       }
     }
     p.label(`들어간 기름 ${d.hits}/3 · 누르면 똑`, CX, CY + 64, 11, C.gold);
-    region({ id: 'mini-focus', x: CX - 180, y: CY - 100, w: 360, h: 180, down: () => { if (!d.falling) d.falling = { x: dx, t0: ui.now }; } });
+    region({ id: 'mini-focus', x: CX - 180, y: CY - 100, w: 360, h: 180, down: () => { if (!d.falling) { d.falling = { x: dx, t0: ui.now }; sfx('tick'); } } });
   },
   route(p, t, m) {
     const d = m.d;
@@ -334,7 +342,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
       p.disc(x, y, 16, done ? C.ok : '#8d9297'); p.ring(x, y, 16, nextOne && Math.sin(t * 8) > 0 ? C.gold : '#3c4044', 2); p.disc(x, y, 4, '#3c4044');
       p.label(String(i + 1), x, y - 30, 11, nextOne ? C.gold : C.cream);
       region({ id: nextOne ? 'mini-focus' : 'mini-pulley' + i, x: x - 18, y: y - 18, w: 36, h: 36, down: () => {
-        if (i === d.at) { d.at++; sfx('pop'); if (d.at >= pts.length) { say('실을 다 걸었다. 팽팽!'); next(); } }
+        if (i === d.at) { d.at++; sfx('pluck'); if (d.at >= pts.length) { say('실을 다 걸었다. 팽팽!'); next(); } }
         else if (i > d.at) { say('순서가 틀렸다. 실이 엉켰다!', true); d.at = 0; }
       } });
     });
@@ -385,7 +393,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     p.line(hx + 40, hy + 40, hx + Math.cos(ang) * 10, hy + Math.sin(ang) * 10 + 30, '#7a5537', 4);
     p.box(CX - 2, CY - 6 - pinH - (swing > 0 ? 0 : 14), 30, 14, '#5d686d');
     p.label(`톡톡 ${d.taps}/4`, CX, CY + 70, 12, C.gold);
-    region({ id: 'mini-focus', x: CX - 90, y: CY - 90, w: 180, h: 160, down: () => { d.taps++; d.swing = ui.now + 0.15; sfx('click'); if (d.taps >= 4) { say('핀이 꽉 박혔다'); next(); } } });
+    region({ id: 'mini-focus', x: CX - 90, y: CY - 90, w: 180, h: 160, down: () => { d.taps++; d.swing = ui.now + 0.15; sfx('hammer'); if (d.taps >= 4) { say('핀이 꽉 박혔다'); next(); } } });
   },
   belt(p, t, m) {
     const d = m.d;
@@ -396,7 +404,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     if (d.at >= 2) { p.line(a[0], a[1] - 15, b[0], b[1] - 40, '#151515', 3); p.line(a[0], a[1] + 15, b[0], b[1] + 40, '#151515', 3); p.ring(b[0], b[1], 41, '#151515', 3); }
     const targets = [a, b];
     targets.forEach(([x, y], i) => region({ id: i === d.at ? 'mini-focus' : 'mini-belt' + i, x: x - 42, y: y - 42, w: 84, h: 84, down: () => {
-      if (i === d.at) { d.at++; sfx('pop'); if (d.at >= 2) { say('벨트를 팽팽하게 걸었다'); next(); } } else say('모터 풀리부터 거세요', true);
+      if (i === d.at) { d.at++; sfx('rubber'); if (d.at >= 2) { say('벨트를 팽팽하게 걸었다'); next(); } } else say('모터 풀리부터 거세요', true);
     } }));
     if (d.at < 2) { const [x, y] = targets[d.at]; if (Math.sin(t * 8) > 0) p.ring(x, y, d.at ? 44 : 18, C.gold, 2); }
   },
@@ -461,8 +469,9 @@ function board(p: Painter, t: number, m: Mini, s: Step, desolder: boolean) {
   if (d.phase === 'heat') {
     if (d.holding) {
       d.heat = Math.min(1.25, d.heat + 0.012);
+      loop.sizzle = 0.3 + d.heat * 0.6;
       if (Math.random() < 0.3) p.rect(lx - 6 + Math.random() * 12, CY + 10 - Math.random() * 20, 2, 3, 'rgba(230,230,230,0.6)');
-      if (d.heat >= 1.2) { d.holding = false; d.heat = 0; say('너무 오래 댔다! 패드가 탄다. 다시', true); }
+      if (d.heat >= 1.2) { d.holding = false; d.heat = 0; say('너무 오래 댔다! 패드가 탄다. 다시', true, 'zap'); }
     } else d.heat = Math.max(0, d.heat - 0.004);
     ironAt(p, d.holding ? lx + 6 : ui.mouse[0], d.holding ? CY + 26 : ui.mouse[1], d.holding);
     p.label('인두를 패드에 대고 누르고 있다가, 초록 온도에서 떼기', CX, CY + 78, 10, C.gold);
@@ -473,7 +482,7 @@ function board(p: Painter, t: number, m: Mini, s: Step, desolder: boolean) {
         if (!d.holding) return;
         d.holding = false;
         if (d.heat < 0.55) { say('덜 달궜다. 조금 더 오래', true); return; }
-        d.phase = desolder ? 'pump' : 'feed'; d.hotUntil = ui.now + (desolder ? 1.8 : 2.4); sfx('click');
+        d.phase = desolder ? 'pump' : 'feed'; d.hotUntil = ui.now + (desolder ? 1.8 : 2.4); sfx('tick');
       },
     });
   } else if (d.phase === 'pump') {
@@ -483,7 +492,7 @@ function board(p: Painter, t: number, m: Mini, s: Step, desolder: boolean) {
     p.box(pump.x, pump.y, pump.w, pump.h, '#c9c9c9', '#5b6064'); p.rect(pump.x + 13, pump.y - 16, 8, 16, C.red);
     p.label('흡입기 누르기!', pump.x + 17, pump.y + pump.h + 4, 10, C.gold);
     if (left <= 0) { d.phase = 'heat'; say('납이 다시 굳었다. 다시 달구자', true); }
-    region({ id: 'mini-focus', ...pump, down: () => { sfx('pop'); say('쭉! 납이 빠졌다'); next(); } });
+    region({ id: 'mini-focus', ...pump, down: () => { say('쭉! 납이 빠졌다', false, 'pump'); next(); } });
   } else if (d.phase === 'feed') {
     const left = d.hotUntil - t;
     d.heat = Math.max(0, 0.5 + left * 0.15);
@@ -494,6 +503,7 @@ function board(p: Painter, t: number, m: Mini, s: Step, desolder: boolean) {
     p.rect(CX - 40, CY + 94, 80, 6, '#3a4a40'); p.rect(CX - 40 + 80 * 0.55, CY + 94, 80 * 0.3, 6, 'rgba(127,191,106,0.6)'); p.rect(CX - 40, CY + 94, 80 * Math.min(1, d.blob), 6, d.blob > 0.85 ? C.red : C.gold);
     if (d.holding) {
       d.blob = Math.min(1.1, d.blob + 0.011);
+      loop.sizzle = 1;
       if (d.blob > 1) { d.holding = false; d.blob = 0; d.phase = 'heat'; d.heat = 0; say('납이 넘쳐 옆과 붙었다! 닦고 다시', true); }
     }
     if (left <= 0 && d.phase === 'feed') { d.cold = true; d.holding = false; say('식어 버렸다… 냉납! 다시', true); d.blob = 0; d.cold = false; d.phase = 'heat'; d.heat = 0; }

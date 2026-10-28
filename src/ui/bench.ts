@@ -33,7 +33,7 @@ export const TOOLS: { id: ToolId; name: string; hint: string }[] = [
 /** 이번 화면에서만 쓰는 연출 상태 */
 const fx = {
   seen: new Set<string>(),
-  banners: [] as { clue: Clue; t0: number }[],
+  banners: [] as { clue: Clue; t0: number; stamped?: boolean }[],
   shake: {} as Record<string, number>,
   note: null as null | { text: string; t0: number; comp?: string },
   meterAt: null as null | { x: number; y: number; t0: number },
@@ -63,7 +63,7 @@ function applyTool(target: { comp?: string; tp?: string }) {
       if (tp) return toast('측정점은 테스터로 재세요');
       if (!comp) return;
       if (comp.hand === 'tune' || comp.hand === 'volume') return toast('아래 노브를 돌리세요');
-      if (comp.hand) { const r = handUse(state, comp.id); if (!r.ok) toast(r.text, true); else sfx('click'); return; }
+      if (comp.hand) { const r = handUse(state, comp.id); if (!r.ok) toast(r.text, true); else sfx(comp.hand === 'power' ? 'plugIn' : comp.hand === 'switch' ? 'toggle' : 'creak'); return; }
       const r = use('touch', { comp: comp.id });
       if (!r.ok) return;
       if (job.ctx.power) { use('wiggle', { comp: comp.id }); fx.shake[comp.id] = ui.now + 0.9; }
@@ -98,7 +98,7 @@ function applyTool(target: { comp?: string; tp?: string }) {
         ui.meter = { mode: 'Ω', value: o.v, expect: typeof comp.ohm === 'number' ? comp.ohm : -1, unit: 'Ω', label: comp.short, cap: o.cap, flicker: o.flicker, t0: ui.now };
       }
       fx.meterAt = { x: px, y: py, t0: ui.now };
-      sfx('click');
+      sfx('probe');
       return;
     }
     case 'ear': {
@@ -377,12 +377,12 @@ function drawControls(p: Painter, def: ItemDef, job: Job) {
   const y = 266, h = 26;
   p.rect(4, y - 1, 404, h + 2, '#16201c');
   const powerOn = job.ctx.power;
-  button(p, 'power', x, y, 72, h, powerOn ? def.power.off : def.power.on, () => { setCtx(state, { power: !powerOn }); sfx(powerOn ? 'click' : 'pop'); }, { kind: powerOn ? 'on' : undefined, size: 10 });
+  button(p, 'power', x, y, 72, h, powerOn ? def.power.off : def.power.on, () => { setCtx(state, { power: !powerOn }); sfx('plugIn'); }, { kind: powerOn ? 'on' : undefined, size: 10 });
   x += 76;
   if (def.sw) {
     p.text(def.id === 'cassette' ? '키' : '스위치', x, y + 8, 9, C.sage, 'left', 700);
     x += def.id === 'cassette' ? 14 : 30;
-    def.sw.forEach((label, i) => { button(p, 'sw' + i, x, y, 24, h, label, () => { setCtx(state, { sw: i }); }, { kind: job.ctx.sw === i ? 'on' : 'quiet', size: 9 }); x += 25; });
+    def.sw.forEach((label, i) => { button(p, 'sw' + i, x, y, 24, h, label, () => { setCtx(state, { sw: i }); sfx('toggle'); }, { kind: job.ctx.sw === i ? 'on' : 'quiet', size: 9 }); x += 25; });
     x += 4;
   }
   for (const [key, label] of [['knobA', def.knobA], ['knobB', def.knobB]] as const) {
@@ -430,13 +430,13 @@ function drawToolbar(p: Painter, job: Job | null) {
     const r = hint(state);
     if (!r.ok) return toast(r.text, true);
     fx.note = { text: r.text, t0: ui.now, comp: r.comp };
-    sfx('pop');
+    sfx('paper');
   }, { kind: 'quiet', size: 10, disabled: !job, sub: `힌트 ${lv}/3 · 5분` });
-  button(p, 'watch', hx, 330, 100, 26, '10분 지켜보기', () => { const r = watch(state); if (!r.ok) toast(r.text, true); else toast('10분 동안 켜 두고 지켜봤다'); }, { kind: 'quiet', size: 10, disabled: !job });
+  button(p, 'watch', hx, 330, 100, 26, '10분 지켜보기', () => { const r = watch(state); if (!r.ok) toast(r.text, true); else { toast('10분 동안 켜 두고 지켜봤다'); sfx('tick', 2); } }, { kind: 'quiet', size: 10, disabled: !job });
   const bx = 404;
   button(p, 'handback', bx, 298, 232, 30, '돌려주기', () => {
     const r = handBack(state);
-    if ('kind' in r) { ui.counter = { kind: 'return', outcome: r }; ui.scene = 'counter'; ui.popups = []; ui.meter = null; sfx(r.kind === 'paid' ? 'coin' : 'bad'); }
+    if ('kind' in r) { ui.counter = { kind: 'return', outcome: r }; ui.scene = 'counter'; ui.popups = []; ui.meter = null; sfx(r.kind === 'paid' ? 'register' : 'lockFail'); }
     else toast(r.text, true);
   }, { kind: 'primary', disabled: !job, size: 13, sub: job ? (job.faults.length ? '손님이 켜 보고 판단한다' : '자물쇠를 다 풀었다!') : undefined });
   button(p, 'shelf', bx, 332, 114, 24, '선반 · 다른 물건', () => { ui.overlay = { kind: 'shelf' }; }, { kind: 'quiet', size: 10 });
@@ -486,7 +486,8 @@ function drawBanner(p: Painter, t: number) {
   while (fx.banners.length && fx.banners[0].t0 && t - fx.banners[0].t0 > 1.9) fx.banners.shift();
   const b = fx.banners[0];
   if (!b) return;
-  if (!b.t0) { b.t0 = t; sfx(b.clue.verdict === 'lead' ? 'good' : 'pop', 0.6); }
+  if (!b.t0) { b.t0 = t; sfx('paper'); }
+  if (!b.stamped && t - b.t0 > 0.35) { b.stamped = true; sfx(b.clue.verdict === 'lead' ? 'stamp' : 'tick', b.clue.verdict === 'lead' ? 1 : 2); }
   const age = t - b.t0;
   const drop = Math.min(1, age * 6);
   const w = 260, h = 46;
@@ -651,7 +652,7 @@ function commitAccuse(a: Action) {
   ov.action = a; ov.fixed = r.fixed ?? 0; ov.text = r.text; ov.t0 = ui.now;
   ui.popups = [];
   sfx('click');
-  setTimeout(() => sfx(ov.fixed ? 'good' : 'bad'), 600);
+  setTimeout(() => sfx(ov.fixed ? 'lockOpen' : 'lockFail'), 600);
 }
 
 export function tutorialTarget(id: string) { return regionById(id); }
