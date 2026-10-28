@@ -136,16 +136,19 @@ export function setLoop(name: 'sizzle' | 'spray', level: number) {
   if (!ac) return;
   let l = loops[name];
   if (!l) {
+    if (level <= 0) return;
     const s = ac.createBufferSource(); s.buffer = noise; s.loop = true;
     const f = ac.createBiquadFilter();
     f.type = name === 'sizzle' ? 'highpass' : 'bandpass'; f.frequency.value = name === 'sizzle' ? 4500 : 5000; f.Q.value = 0.6;
+    // 떨림은 앞 단계에서 걸고, 마지막 음량(g)이 0이면 완전히 조용하다
+    const shape = ac.createGain(); shape.gain.value = name === 'sizzle' ? 0.6 : 1;
     const g = ac.createGain(); g.gain.value = 0;
-    s.connect(f).connect(g).connect(sfxBus); s.start();
+    s.connect(f).connect(shape).connect(g).connect(sfxBus); s.start();
     if (name === 'sizzle') {
-      // 지글지글: 진폭을 거칠게 흔든다
+      // 지글지글: 진폭을 거칠게 흔든다 (0.2 ~ 1.0)
       const lfo = ac.createOscillator(), lg = ac.createGain();
       lfo.type = 'square'; lfo.frequency.value = 23; lg.gain.value = 0.4;
-      lfo.connect(lg).connect(g.gain); lfo.start();
+      lfo.connect(lg).connect(shape.gain); lfo.start();
     }
     l = loops[name] = { g };
   }
