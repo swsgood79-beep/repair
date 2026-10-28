@@ -1,7 +1,7 @@
 /** 수리 동작. 교체는 그 부품의 모든 고장을 없애지만 돈이 든다. */
 export type Action = 'replace' | 'clean' | 'solder' | 'oil' | 'adjust';
 
-export type ToolId = 'hand' | 'driver' | 'look' | 'loupe' | 'volt' | 'ohm' | 'ear' | 'touch' | 'wiggle' | 'inject' | 'mark' | 'repair';
+export type ToolId = 'hand' | 'driver' | 'look' | 'loupe' | 'tester' | 'volt' | 'ohm' | 'ear' | 'touch' | 'wiggle' | 'inject' | 'mark' | 'repair';
 
 export type Shape =
   | 'plug' | 'cord' | 'switch' | 'keys' | 'fuse' | 'xfmr' | 'cap' | 'tube' | 'pot' | 'speaker'
@@ -157,6 +157,10 @@ export interface Finding {
   ear?: Sound;
   tp?: Reading;
   inject?: number;
+  /** 흔들었을 때 증상이 바뀌었는가 */
+  shake?: boolean;
+  /** 발견 순서 */
+  t?: number;
 }
 
 export interface Job {
@@ -174,6 +178,12 @@ export interface Job {
   spent: number;
   comeback?: boolean;
   solved: string[];
+  /** 단서 발견 순서 번호 */
+  seq?: number;
+  /** 틀린 정답 시도 수 (수리비가 깎인다) */
+  wrong?: number;
+  /** 받은 힌트 단계 */
+  hints?: number;
 }
 
 export interface Customer { name: string; hair: string; skin: string; shirt: string; style: number; hello: string; thanks: string; angry: string }

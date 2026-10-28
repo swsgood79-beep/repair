@@ -187,7 +187,7 @@ export function drawHud(p: Painter) {
 /* ---------- 창들 ---------- */
 export function drawOverlay(p: Painter, t: number) {
   const ov = ui.overlay;
-  if (!ov || ov.kind === 'repair') return;
+  if (!ov || ov.kind === 'accuse') return;
   const s = holder.state;
   dim(p);
   const close = () => { ui.overlay = null; };

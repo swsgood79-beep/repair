@@ -3,17 +3,16 @@ import { CUSTOMERS, ITEMS, item } from './items';
 
 export const DAY_MINUTES = 600; // 09:00 ~ 19:00
 export const DEADLINE = 14;
-export const START_DEBT = 800000;
+export const START_DEBT = 600000;
 export const DAILY_COST = 20000;
 export const SHELF_LIMIT = 6;
 const SAVE_KEY = 'nopo-repair:v2';
 
 export const TOOL_SHOP = [
   { id: 'loupe', name: '돋보기', price: 15000, day: 1, desc: '가는 금, 바랜 막, 굳은 기름을 본다' },
-  { id: 'inject', name: '신호 주입기', price: 30000, day: 3, desc: '신호 단에 삐— 소리를 넣어 뒤쪽을 듣는다' },
 ];
 
-export const TOOL_TIME: Record<ToolId, number> = { hand: 0, driver: 5, look: 1, loupe: 2, volt: 2, ohm: 2, ear: 1, wiggle: 1, touch: 1, inject: 2, mark: 0, repair: 0 };
+export const TOOL_TIME: Record<ToolId, number> = { tester: 2, hand: 0, driver: 5, look: 1, loupe: 2, volt: 2, ohm: 2, ear: 1, wiggle: 1, touch: 1, inject: 2, mark: 0, repair: 0 };
 export const ACTION_TIME: Record<Action, number> = { replace: 8, clean: 6, solder: 7, oil: 6, adjust: 10 };
 export const ACTION_NAME: Record<Action, string> = { replace: '교체', clean: '세척', solder: '납땜', oil: '주유', adjust: '조정' };
 
@@ -130,7 +129,7 @@ export function settle(job: Job) {
 }
 
 export function timeLeft(state: GameState) { return DAY_MINUTES - state.minute; }
-export type Result = { ok: boolean; text: string };
+export type Result = { ok: boolean; text: string; fixed?: number };
 const fail = (text: string): Result => ({ ok: false, text });
 
 function canSpend(state: GameState, minutes: number): Result | null {
@@ -152,7 +151,11 @@ export function ohmOf(job: Job, comp: Comp): Ohm | null {
   return comp.ohm === 'cap' ? { v: Infinity, cap: 'kick' } : { v: comp.ohm };
 }
 
-function found(job: Job, id: string): Finding { return (job.found[id] ??= {}); }
+function found(job: Job, id: string): Finding {
+  const f = (job.found[id] ??= {});
+  f.t = job.seq = (job.seq ?? 0) + 1;
+  return f;
+}
 
 /** 공구를 부품이나 측정점에 쓴다. 결과는 job.found에 남는다. */
 export function useTool(state: GameState, tool: ToolId, target: { comp?: string; tp?: string }): Result {
@@ -215,6 +218,14 @@ export function useTool(state: GameState, tool: ToolId, target: { comp?: string;
       const f = found(job, comp.id);
       f.heat = sim.heat[comp.id] ?? 0;
       f.feel = def.feel?.(new Set(job.faults), comp.id) ?? onComp.find(x => x.feel)?.feel ?? comp.feel;
+      break;
+    }
+    case 'wiggle': {
+      if (!comp) return fail('부품을 누르세요');
+      if (!job.ctx.power) return fail('켠 채로 흔들어야 압니다');
+      const moved = simulate(job, { wiggle: comp.id });
+      found(job, comp.id).shake = moved.obs !== sim.obs || def.tps.some(t2 => moved.tp[t2.id]?.v !== sim.tp[t2.id]?.v);
+      text = moved.obs;
       break;
     }
     case 'inject': {
@@ -299,7 +310,8 @@ export function repair(state: GameState, compId: string, action: Action): Result
   delete job.found[comp.id];
   job.ctx.warm = false;
   job.ctx.nudge = false;
-  return { ok: true, text: `${comp.short} ${ACTION_NAME[action]} 끝${price ? ' −' + won(price) : ''}` };
+  if (!fixed.length) job.wrong = (job.wrong ?? 0) + 1;
+  return { ok: true, text: `${comp.short} ${ACTION_NAME[action]}${price ? ' −' + won(price) : ''}`, fixed: fixed.length };
 }
 
 export function setOpen(state: GameState, level: number): Result {
@@ -371,6 +383,7 @@ export function handBack(state: GameState, giveUp = false): ReturnOutcome | Resu
   }
   if (job.faults.some(id => !faultOf(def, id).latent)) return { kind: 'refused', job, fee: 0, comeback: false, learned: [] };
   const comeback = job.faults.length > 0;
+  job.fee = payFor(job);
   state.money += job.fee;
   state.summary.income += job.fee;
   state.summary.returned++;
@@ -455,4 +468,35 @@ export function continueEndless(state: GameState) { state.endless = true; state.
 
 export function casebookEntries() {
   return ITEMS.flatMap(def => def.faults.map(f => ({ key: `${def.id}/${f.id}`, item: def, fault: f })));
+}
+
+/** 틀린 정답 시도마다 10%씩 깎인 수리비 (최소 절반) */
+export function payFor(job: Job) {
+  return Math.round(job.fee * Math.max(0.5, 1 - 0.1 * (job.wrong ?? 0)) / 100) * 100;
+}
+
+const ACTION_HINT: Record<Action, string> = { replace: '새 것으로 바꿔야 한다', clean: '닦으면 산다', solder: '납땜을 다시 하면 된다', oil: '기름이 필요하다', adjust: '맞춰 주면 된다' };
+
+/** 할아버지 쪽지: 단계마다 더 구체적인 힌트. 5분이 든다 */
+export function hint(state: GameState): Result & { comp?: string; level?: number } {
+  const job = activeJob(state);
+  if (!job) return fail('');
+  const def = item(job.itemId);
+  const target = job.faults.map(id => faultOf(def, id)).sort((a, b) => Number(!!a.latent) - Number(!!b.latent))[0];
+  if (!target) return { ok: true, text: '다 고친 것 같구나. 켜 보고 돌려주거라.' };
+  const blocked = canSpend(state, 5);
+  if (blocked) return blocked;
+  state.minute += 5;
+  const level = job.hints = Math.min(3, (job.hints ?? 0) + 1);
+  const comp = compOf(def, target.comp)!;
+  if (level === 1) {
+    const how = target.latent ? '켜 두고 10분 지켜보거나, 켠 채로 손으로 흔들어 봐라'
+      : target.mark && !target.fine ? '눈으로 하나씩 살펴봐라. 흠이 보일 게다'
+      : target.ohm ? '전기가 어디까지 오는지 테스터로 따라가 봐라'
+      : target.feel ? '손으로 만져 보고 돌려 봐라'
+      : '켜 놓고 청진기를 대 봐라';
+    return { ok: true, text: how, level };
+  }
+  if (level === 2) return { ok: true, text: `${comp.short} 근처가 수상하구나`, comp: comp.id, level };
+  return { ok: true, text: `범인은 ${comp.short}. ${ACTION_HINT[target.fix]}`, comp: comp.id, level };
 }

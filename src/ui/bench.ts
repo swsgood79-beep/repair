@@ -4,140 +4,155 @@ import { STATIONS } from '../items/radio';
 import { C, Painter } from '../gfx/painter';
 import { drawCloseup, drawCustomer, drawPart, drawToolIcon } from '../gfx/parts';
 import {
-  ACTION_NAME, TOOL_TIME, activeJob, compOf, customerOf, events, handBack, handUse, ohmOf, reachable, repair, repairCheck,
-  repairMinutes, setCtx, setOpen, simulate, startWiggle, stopWiggle, timeLeft, useTool, visible, watch, won,
+  ACTION_NAME, activeJob, compOf, customerOf, events, handBack, handUse, hint, payFor, reachable, repair, repairCheck,
+  repairMinutes, setCtx, setOpen, simulate, useTool, visible, watch, won,
 } from '../game';
 import { sfx } from '../audio';
 import { button, holder, region, regionById, toast, ui } from './core';
-import { BAD_SOUND, FEEL_WORD, HEAT_WORD, MARK_WORD, SOUND_WORD, findingState, ohmText, tpState, tpText } from './words';
-import { tutorialStep, drawTutorial } from './tutorial';
+import { FEEL_WORD, HEAT_WORD, SOUND_WORD, BAD_SOUND, BAD_FEEL, ohmText, tpState, tpText } from './words';
+import { cluesOf, statusOf, suspects, type Clue, type Status } from './clues';
 
 /* ---------- 배치 ---------- */
 export const STAGE = { x: 4, y: 52, w: 404, h: 212 };
 const K = Math.min(STAGE.w / 640, STAGE.h / 380);
 const OX = STAGE.x + (STAGE.w - 640 * K) / 2;
 const OY = STAGE.y + (STAGE.h - 380 * K) / 2;
-const FLOW = { x: 412, y: 22, w: 224, h: 152 };
-const METER = { x: 412, y: 178, w: 224, h: 86 };
-
 const mx = (v: number) => OX + v * K;
 const my = (v: number) => OY + v * K;
 export function compRect(c: Comp) { return { x: mx(c.x), y: my(c.y), w: c.w * K, h: c.h * K }; }
 
-export const TOOLS: { id: ToolId; name: string; needs?: string }[] = [
-  { id: 'hand', name: '손' }, { id: 'driver', name: '드라이버' }, { id: 'look', name: '눈' }, { id: 'loupe', name: '돋보기', needs: 'loupe' },
-  { id: 'volt', name: '전압' }, { id: 'ohm', name: '저항' }, { id: 'ear', name: '귀' }, { id: 'touch', name: '만지기' },
-  { id: 'wiggle', name: '흔들기' }, { id: 'inject', name: '주입기', needs: 'inject' }, { id: 'mark', name: '표시' }, { id: 'repair', name: '수리' },
+export const TOOLS: { id: ToolId; name: string; hint: string }[] = [
+  { id: 'hand', name: '손', hint: '켜고 끄기 · 만지기 · 흔들기' },
+  { id: 'driver', name: '드라이버', hint: '덮개를 눌러 연다' },
+  { id: 'look', name: '눈', hint: '부품의 흠을 찾는다' },
+  { id: 'tester', name: '테스터', hint: '측정점=전압, 부품=저항(전원 끄고)' },
+  { id: 'ear', name: '청진기', hint: '켠 채로 소리를 듣는다' },
 ];
 
-const TOOL_HINT: Record<ToolId, string> = {
-  hand: '플러그·스위치·날개를 손으로 조작', driver: '덮개를 눌러 연다', look: '부품의 겉모습', loupe: '눈으로 못 보는 흠',
-  volt: '전원을 켜고 놋쇠 측정점에', ohm: '전원을 끄고 부품에', ear: '켠 채로 부품에 귀를', touch: '온도와 손맛',
-  wiggle: '누르고 있는 동안 흔든다', inject: '신호 측정점에 삐—', mark: '의심 ? → 정상 ✓ → 지움', repair: '고칠 부품을 누른다',
+/** 이번 화면에서만 쓰는 연출 상태 */
+const fx = {
+  seen: new Set<string>(),
+  banners: [] as { clue: Clue; t0: number }[],
+  shake: {} as Record<string, number>,
+  note: null as null | { text: string; t0: number; comp?: string },
+  meterAt: null as null | { x: number; y: number; t0: number },
+  lastJob: '',
 };
 
-/* ---------- 공구 적용 ---------- */
+const STAMP: Record<Status | 'info', [string, string]> = { lead: ['유력!', C.red], zone: ['의심', '#d98a2b'], pass: ['통과', '#3f8a3a'], none: ['', C.ink], info: ['메모', '#6b6450'] };
+
+/* ---------- 공구 쓰기 ---------- */
+function use(tool: ToolId, target: { comp?: string; tp?: string }) {
+  const r = useTool(holder.state, tool, target);
+  if (!r.ok && r.text) toast(r.text, true);
+  return r;
+}
+
 function applyTool(target: { comp?: string; tp?: string }) {
   const state = holder.state;
   const job = activeJob(state);
   if (!job) return;
   const def = item(job.itemId);
-  const tool = ui.tool;
   const comp = target.comp ? compOf(def, target.comp) : undefined;
   const tp = target.tp ? def.tps.find(t => t.id === target.tp) : undefined;
-  if (tool === 'hand') {
-    if (!comp) return toast('측정점은 테스터로 재세요');
-    if (!comp.hand) return toast(`${comp.short}: 손으로 할 게 없다`);
-    if (comp.hand === 'tune' || comp.hand === 'volume') return toast('아래 노브를 돌리세요');
-    const r = handUse(state, comp.id);
-    if (!r.ok) toast(r.text, true); else sfx('click');
-    return;
-  }
-  if (tool === 'driver') return toast('덮개를 누르거나 아래 [열기]를 쓰세요');
-  if (tool === 'wiggle') return;
-  if (tool === 'repair') {
-    if (!comp) return toast('고칠 부품을 누르세요');
-    const acts = actionsOf(comp);
-    if (!acts.length) return toast(`${comp.short}: 이 가게에선 손 못 댐`, true);
-    if (job.ctx.power && def.id !== 'clock') return toast('감전 위험! 전원부터 빼세요', true);
-    ui.overlay = { kind: 'repair', comp: comp.id, progress: 0, target: 0.25 + Math.random() * 0.5, holding: false, hold0: 0, msg: '' };
-    return;
-  }
-  const r = useTool(state, tool, target);
-  if (!r.ok) { if (r.text) toast(r.text, true); return; }
-  const f = job.found[comp?.id ?? tp!.id];
   const at = comp ? compRect(comp) : { x: mx(tp!.x) - 4, y: my(tp!.y) - 4, w: 8, h: 8 };
   const px = at.x + at.w / 2, py = at.y + at.h / 2;
-  switch (tool) {
-    case 'look': case 'loupe':
-      if (tp?.kind === 'amp') { setMeter('amp', f.tp!.v, tp.expect, '°', tp.label); break; }
-      ui.popups = ui.popups.filter(p => p.kind !== 'closeup');
-      ui.popups.push({ kind: 'closeup', x: px, y: py, shape: comp!.shape, mark: f[tool]!, text: r.text, t0: ui.now });
-      sfx(f[tool] === 'ok' ? 'pop' : 'bad', 0.5);
-      break;
-    case 'volt':
-      setMeter('V', f.tp!.v, tp!.expect, tp!.unit, tp!.label, f.tp!.shaky);
-      sfx('click');
-      break;
-    case 'ohm': {
-      const o = f.ohm!;
-      ui.meter = { mode: 'Ω', value: o.v, expect: typeof comp!.ohm === 'number' ? comp!.ohm : -1, unit: 'Ω', label: comp!.short, cap: o.cap, flicker: o.flicker, t0: ui.now };
-      sfx('click');
-      break;
-    }
-    case 'ear':
-      if (tp?.kind === 'beat') { ui.meter = { mode: 'beat', value: f.tp!.v, b: f.tp!.b, expect: tp.expect, unit: '초', label: '박자', t0: ui.now }; break; }
-      ui.popups.push({ kind: 'sound', x: px, y: at.y, sound: f.ear!, t0: ui.now });
-      break;
-    case 'touch':
+  switch (ui.tool) {
+    case 'hand': {
+      if (tp) return toast('측정점은 테스터로 재세요');
+      if (!comp) return;
+      if (comp.hand === 'tune' || comp.hand === 'volume') return toast('아래 노브를 돌리세요');
+      if (comp.hand) { const r = handUse(state, comp.id); if (!r.ok) toast(r.text, true); else sfx('click'); return; }
+      const r = use('touch', { comp: comp.id });
+      if (!r.ok) return;
+      if (job.ctx.power) { use('wiggle', { comp: comp.id }); fx.shake[comp.id] = ui.now + 0.9; }
+      const f = job.found[comp.id];
       ui.popups.push({ kind: 'touch', x: px, y: at.y, heat: f.heat ?? 0, feel: f.feel, t0: ui.now });
-      break;
-    case 'inject': {
-      const speaker = def.comps.find(c => c.shape === 'speaker');
-      const sr = speaker ? compRect(speaker) : at;
-      ui.popups.push({ kind: 'beep', x: sr.x + sr.w / 2, y: sr.y, level: f.inject ?? 0, t0: ui.now });
-      setMeter('inject', f.inject ?? 0, 1, '', tp!.label);
-      sfx('beep', (f.inject ?? 0) * 0.8 + 0.05);
-      break;
+      return;
+    }
+    case 'driver': return toast('덮개를 누르거나 아래 [열기]를 쓰세요');
+    case 'look': {
+      if (tp && tp.kind !== 'amp') return toast('측정점은 테스터로 재세요');
+      const r = use(state.tools.includes('loupe') && !tp ? 'loupe' : 'look', target);
+      if (!r.ok || !comp) return;
+      const f = job.found[comp.id];
+      const mark = f.loupe ?? f.look ?? 'ok';
+      ui.popups = ui.popups.filter(pp => pp.kind !== 'closeup');
+      ui.popups.push({ kind: 'closeup', x: px, y: py, shape: comp.shape, mark, text: r.text, t0: ui.now });
+      sfx(mark === 'ok' ? 'pop' : 'bad', 0.5);
+      return;
+    }
+    case 'tester': {
+      if (def.id === 'clock') return toast('태엽 시계엔 전기가 없다. 귀와 눈으로!');
+      if (tp) {
+        if (tp.kind === 'beat' || tp.kind === 'amp') return toast('여긴 귀나 눈으로');
+        if (!job.ctx.power) return toast('전원을 켜고 재야 전압이 잡힌다', true);
+        if (!use('volt', target).ok) return;
+        const r = job.found[tp.id].tp!;
+        ui.meter = { mode: 'V', value: r.v, expect: tp.expect, unit: tp.unit, label: tp.label, shaky: r.shaky, t0: ui.now };
+      } else if (comp) {
+        if (job.ctx.power) return toast('저항은 전원을 빼고 잰다 (손으로 플러그)', true);
+        if (!use('ohm', target).ok) return;
+        const o = job.found[comp.id].ohm!;
+        ui.meter = { mode: 'Ω', value: o.v, expect: typeof comp.ohm === 'number' ? comp.ohm : -1, unit: 'Ω', label: comp.short, cap: o.cap, flicker: o.flicker, t0: ui.now };
+      }
+      fx.meterAt = { x: px, y: py, t0: ui.now };
+      sfx('click');
+      return;
+    }
+    case 'ear': {
+      if (tp) {
+        if (tp.kind !== 'beat') return toast('측정점은 테스터로 재세요');
+        use('ear', target);
+        return;
+      }
+      if (!comp) return;
+      if (!job.ctx.power) return toast('켜 놓아야 소리가 난다', true);
+      if (!use('ear', target).ok) return;
+      ui.popups.push({ kind: 'sound', x: px, y: at.y, sound: job.found[comp.id].ear!, t0: ui.now });
+      return;
     }
   }
-  void ohmOf;
-}
-
-function setMeter(mode: 'V' | 'amp' | 'inject', value: number, expect: number, unit: string, label: string, shaky?: boolean) {
-  ui.meter = { mode, value, expect, unit, label, shaky, t0: ui.now };
-}
-
-export function actionsOf(c: Comp): Action[] {
-  const acts = [...c.acts];
-  if (c.part && !acts.includes('replace')) acts.unshift('replace');
-  return acts;
 }
 
 /* ---------- 그리기 ---------- */
 export function drawBench(p: Painter, t: number) {
   const state = holder.state;
   const job = activeJob(state);
-  for (const e of events.splice(0)) { toast(e.text, !!e.bad); sfx('zap'); }
+  for (const e of events.splice(0)) { toast(e.text + '  자물쇠가 하나 늘었다!', true); sfx('zap'); }
   drawTicket(p, job, t);
   if (!job) {
     p.box(STAGE.x, STAGE.y, STAGE.w, STAGE.h, C.night);
     p.text('선반이 비었습니다', STAGE.x + STAGE.w / 2, STAGE.y + 90, 16, C.cream, 'center', 700);
-    p.text('오늘 영업을 마감하세요', STAGE.x + STAGE.w / 2, STAGE.y + 116, 11, C.sage, 'center');
-    button(p, 'close-day', STAGE.x + STAGE.w / 2 - 60, STAGE.y + 140, 120, 24, '영업 마감', () => { ui.overlay = { kind: 'close' }; }, { kind: 'primary' });
+    button(p, 'close-day', STAGE.x + STAGE.w / 2 - 60, STAGE.y + 120, 120, 26, '영업 마감', () => { ui.overlay = { kind: 'close' }; }, { kind: 'primary' });
     drawToolbar(p, null);
     return;
   }
+  if (fx.lastJob !== job.id) { fx.lastJob = job.id; fx.note = null; fx.meterAt = null; ui.meter = null; }
   const def = item(job.itemId);
   const sim = simulate(job);
-  drawStage(p, def, job, sim, t);
-  drawFlow(p, def, job);
-  drawMeter(p, t);
+  const clues = cluesOf(def, job);
+  for (const c of clues) {
+    const key = `${job.id}/${c.key}/${c.title}`;
+    if (!fx.seen.has(key)) { fx.seen.add(key); fx.banners.push({ clue: c, t0: 0 }); }
+  }
+  const status = statusOf(def, job, clues);
+  drawStage(p, def, job, sim, status, t);
+  drawSuspects(p, def, job, status);
+  drawNotebook(p, clues);
   drawControls(p, def, job);
   drawToolbar(p, job);
   drawPopups(p, t);
-  drawTutorial(p, t);
-  return sim;
+  drawMeterPopup(p, t);
+  drawBanner(p, t);
+  drawNote(p, def, t);
+}
+
+function lockIcon(p: Painter, x: number, y: number, open: boolean, s = 1) {
+  const r = (a: number, b: number, w: number, h: number, c: string) => p.rect(x + a * s, y + b * s, w * s, h * s, c);
+  if (open) { r(2, 0, 6, 2, C.steel); r(2, 0, 2, 5, C.steel); r(8, 2, 2, 3, C.steel); }
+  else { r(3, 0, 6, 2, C.steel); r(2, 1, 2, 5, C.steel); r(8, 1, 2, 5, C.steel); }
+  r(0, 5, 12, 9, open ? C.ok : C.gold); r(0, 5, 12, 1, 'rgba(255,255,255,0.4)'); r(5, 8, 2, 3, C.ink);
 }
 
 function drawTicket(p: Painter, job: Job | null, t: number) {
@@ -146,24 +161,42 @@ function drawTicket(p: Painter, job: Job | null, t: number) {
   const def = item(job.itemId);
   const cu = customerOf(job);
   p.rect(6, 24, 26, 24, '#c9bf98');
-  p.g.save(); p.g.beginPath(); p.g.rect(6, 24, 26, 24); p.g.clip();
-  drawCustomerMini(p, cu, 7, 24, t);
-  p.g.restore();
-  const due = job.dueDay - holder.state.day;
+  const g = p.g;
+  g.save(); g.beginPath(); g.rect(6, 24, 26, 24); g.clip(); g.translate(7, 24); g.scale(1 / 3, 1 / 3); drawCustomer(p, cu, 0, 4, 'calm', t); g.restore();
   p.text(def.name, 38, 25, 11, C.ink, 'left', 700);
-  p.text(job.comeback ? '무상 재수리' : won(job.fee), 402, 25, 11, job.comeback ? C.red : C.ink, 'right', 700);
-  p.text(due <= 0 ? '오늘 찾으러 옴' : `${due}일 뒤`, 402, 37, 9, due <= 0 ? C.red : '#5b5644', 'right', 700);
-  const quote = `“${job.complaint}”`;
-  const fit = p.measure(quote, 10) > 290 ? quote.slice(0, 34) + '…”' : quote;
-  p.text(fit, 38 + p.measure(def.name, 11, 700) + 8, 26, 10, '#24406b', 'left', 500);
   p.text(cu.name, 38, 38, 9, '#5b5644', 'left', 500);
+  const quote = `“${job.complaint}”`;
+  const fit = p.measure(quote, 10) > 200 ? quote.slice(0, 22) + '…”' : quote;
+  p.text(fit, 38 + p.measure(def.name, 11, 700) + 8, 26, 10, '#24406b', 'left', 500);
+  // 자물쇠: 남은 고장 수
+  const open = job.solved.length, shut = job.faults.length;
+  let lx = 300;
+  for (let i = 0; i < open + shut; i++) { lockIcon(p, lx, 31, i < open); lx += 15; }
+  p.text(shut ? `자물쇠 ${shut}` : '모두 풀림!', lx + 2, 33, 9, shut ? '#5b5644' : '#3f8a3a', 'left', 700);
+  p.text(job.comeback ? '무상' : won(payFor(job)), 402, 25, 10, job.wrong ? C.red : C.ink, 'right', 700);
 }
 
-function drawCustomerMini(p: Painter, cu: { hair: string; skin: string; shirt: string; style: number }, x: number, y: number, t: number) {
-  const g = p.g;
-  g.save(); g.translate(x, y); g.scale(1 / 3, 1 / 3);
-  drawCustomer(p, cu, 0, 4, 'calm', t);
-  g.restore();
+function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof simulate>, status: Record<string, Status>, t: number) {
+  const S = STAGE;
+  p.box(S.x, S.y, S.w, S.h, '#1b2823', C.ink);
+  for (let x = S.x + 10; x < S.x + S.w; x += 16) p.rect(x, S.y + 1, 1, S.h - 2, '#22332b');
+  for (let y = S.y + 10; y < S.y + S.h; y += 16) p.rect(S.x + 1, y, S.w - 2, 1, '#22332b');
+  // 작업등 불빛
+  for (let i = 5; i > 0; i--) p.disc(S.x + S.w / 2, S.y + S.h / 2, 40 + i * 22, `rgba(255,214,140,0.025)`);
+  decor(p, def);
+  const inner = def.comps.filter(c => c.layer > 0 && visible(job, c.layer));
+  const outer = def.comps.filter(c => c.layer === 0 && !(c.front && job.open > 0));
+  if (job.open > 0) { drawWires(p, def, job, () => true); for (const c of inner) drawComp(p, c, job, sim, status, t); }
+  drawCover(p, def, job, t);
+  if (job.open === 0) drawWires(p, def, job, l => l === 0);
+  for (const c of outer) drawComp(p, c, job, sim, status, t);
+  for (const tp of def.tps) if (visible(job, tp.layer)) drawTP(p, tp, job, t);
+  // 지금 상태 띠
+  const alive = Object.values(sim.fx.glow ?? {}).some(v => v > 0) || sim.fx.spin || sim.fx.swing || sim.fx.tone;
+  p.rect(S.x + 1, S.y + S.h - 17, S.w - 2, 16, 'rgba(10,16,13,0.85)');
+  p.rect(S.x + 1, S.y + S.h - 17, 3, 16, alive ? C.ok : C.warn);
+  p.text(`지금  ${sim.obs}`, S.x + 9, S.y + S.h - 15, 10, C.cream, 'left', 700);
+  p.text(TOOLS.find(x => x.id === ui.tool)?.hint ?? '', S.x + S.w - 6, S.y + S.h - 14, 9, C.sage, 'right', 500);
 }
 
 function decor(p: Painter, def: ItemDef) {
@@ -191,8 +224,7 @@ function decor(p: Painter, def: ItemDef) {
   }
 }
 
-function drawCover(p: Painter, def: ItemDef, job: Job) {
-  const tool = ui.tool;
+function drawCover(p: Painter, def: ItemDef, job: Job, t: number) {
   if (job.open < 1) {
     const [x, y, w, h] = def.cover;
     const r = { x: mx(x), y: my(y), w: w * K, h: h * K };
@@ -204,20 +236,18 @@ function drawCover(p: Painter, def: ItemDef, job: Job) {
       p.box(r.x, r.y, r.w, r.h, '#47392d', '#1c140e');
       p.rect(r.x + 2, r.y + 2, r.w - 4, 1, '#5e4c3c');
       for (const [sx, sy] of [[r.x + 5, r.y + 5], [r.x + r.w - 7, r.y + 5], [r.x + 5, r.y + r.h - 7], [r.x + r.w - 7, r.y + r.h - 7]]) { p.disc(sx + 1, sy + 1, 2, '#b9b9b9'); p.rect(sx, sy + 1, 3, 1, '#555'); }
-      p.label(def.coverLabel, r.x + r.w / 2, r.y + r.h / 2 - 6, 10, '#d8c6a4');
+      p.label(`${def.coverLabel} (드라이버로 열기)`, r.x + r.w / 2, r.y + r.h / 2 - 6, 9, '#d8c6a4');
     }
-    if (tool === 'driver') {
-      const pulse = Math.sin(ui.now * 6) > 0;
-      if (pulse) { p.rect(r.x, r.y, r.w, 1, C.gold); p.rect(r.x, r.y + r.h - 1, r.w, 1, C.gold); p.rect(r.x, r.y, 1, r.h, C.gold); p.rect(r.x + r.w - 1, r.y, 1, r.h, C.gold); }
-      region({ id: 'cover', ...r, click: () => openCover(1) });
-    }
+    sparkle(p, r.x + r.w - 10, r.y + 8, t, 3);
+    region({ id: 'cover', ...r, click: () => { if (ui.tool !== 'driver') { ui.tool = 'driver'; } openCover(1); } });
   }
   if (def.chassis && job.open === 1) {
     const [x, y, w, h] = def.chassis;
     const r = { x: mx(x), y: my(y), w: w * K, h: h * K };
     p.box(r.x, r.y, r.w, r.h, '#6b6f72', '#2d3033');
-    p.label(def.chassisLabel!, r.x + r.w / 2, r.y + r.h / 2 - 6, 9, C.cream);
-    if (tool === 'driver') region({ id: 'chassis', ...r, click: () => openCover(2) });
+    p.label(`${def.chassisLabel} (드라이버로 빼기)`, r.x + r.w / 2, r.y + r.h / 2 - 6, 9, C.cream);
+    sparkle(p, r.x + r.w - 10, r.y + 6, t, 5);
+    region({ id: 'chassis', ...r, click: () => { if (ui.tool !== 'driver') ui.tool = 'driver'; openCover(2); } });
   }
 }
 
@@ -234,220 +264,102 @@ function drawWires(p: Painter, def: ItemDef, job: Job, layerFilter: (l: number) 
   }
 }
 
-function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof simulate>, t: number) {
-  const S = STAGE;
-  p.box(S.x, S.y, S.w, S.h, '#20302a', C.ink);
-  for (let x = S.x + 10; x < S.x + S.w; x += 16) p.rect(x, S.y + 1, 1, S.h - 2, '#253830');
-  for (let y = S.y + 10; y < S.y + S.h; y += 16) p.rect(S.x + 1, y, S.w - 2, 1, '#253830');
-  decor(p, def);
-  const inner = def.comps.filter(c => c.layer > 0 && visible(job, c.layer));
-  const outer = def.comps.filter(c => c.layer === 0 && !(c.front && job.open > 0));
-  if (job.open > 0) { drawWires(p, def, job, () => true); for (const c of inner) drawComp(p, c, job, sim, t); }
-  drawCover(p, def, job);
-  if (job.open === 0) drawWires(p, def, job, l => l === 0);
-  for (const c of outer) drawComp(p, c, job, sim, t);
-  for (const tp of def.tps) if (visible(job, tp.layer)) drawTP(p, tp, job);
-  // 지금 상태 띠
-  const obs = sim.obs;
-  p.rect(S.x + 1, S.y + S.h - 17, S.w - 2, 16, 'rgba(10,16,13,0.82)');
-  p.rect(S.x + 1, S.y + S.h - 17, 3, 16, sim.fx.glow && Object.values(sim.fx.glow).some(v => v > 0) || sim.fx.spin || sim.fx.swing || sim.fx.tone ? C.ok : C.warn);
-  p.text(`지금  ${obs}`, S.x + 9, S.y + S.h - 15, 10, C.cream, 'left', 700);
-  p.text(TOOL_HINT[ui.tool], S.x + S.w - 6, S.y + S.h - 14, 9, C.sage, 'right', 500);
-  const hov = ui.hover.startsWith('c:') ? compOf(def, ui.hover.slice(2)) : ui.hover.startsWith('t:') ? def.tps.find(x => x.id === ui.hover.slice(2)) : undefined;
-  if (hov && !ui.popups.length) drawHoverInfo(p, def, job, hov);
+/** 아직 안 살펴본 곳에서 반짝이는 별 */
+function sparkle(p: Painter, x: number, y: number, t: number, seed: number) {
+  const a = (Math.sin(t * 3 + seed * 1.7) + 1) / 2;
+  if (a < 0.35) return;
+  const c = `rgba(255,236,160,${a})`;
+  p.rect(x - 1, y - 4, 2, 9, c); p.rect(x - 4, y - 1, 9, 2, c); p.rect(x, y, 1, 1, C.white);
 }
 
-function drawComp(p: Painter, c: Comp, job: Job, sim: ReturnType<typeof simulate>, t: number) {
+function drawComp(p: Painter, c: Comp, job: Job, sim: ReturnType<typeof simulate>, status: Record<string, Status>, t: number) {
   const r = compRect(c);
-  const shake = job.ctx.wiggle === c.id;
-  drawPart(p, c, r, sim.fx, job.ctx, t, shake);
+  const shaking = (fx.shake[c.id] ?? 0) > ui.now;
+  drawPart(p, c, r, sim.fx, shaking ? { ...job.ctx, wiggle: c.id } : job.ctx, t, shaking);
   const id = 'c:' + c.id;
   const hovered = ui.hover === id;
-  if (hovered) {
-    p.rect(r.x - 2, r.y - 2, r.w + 4, 1, C.gold); p.rect(r.x - 2, r.y + r.h + 1, r.w + 4, 1, C.gold);
-    p.rect(r.x - 2, r.y - 2, 1, r.h + 4, C.gold); p.rect(r.x + r.w + 1, r.y - 2, 1, r.h + 4, C.gold);
-  }
-  if (job.open > 0 || hovered || c.layer === 0) p.label(c.short, r.x + r.w / 2, r.y + r.h + 1, 8, hovered ? C.gold : C.cream);
-  const tag = job.tags[c.id];
-  const fs = findingState(job.found[c.id], c.ohm);
-  let bx = r.x + r.w - 2;
-  if (tag) { p.disc(bx, r.y + 1, 5, tag === 'sus' ? C.red : C.ok); p.ring(bx, r.y + 1, 5, C.ink); p.label(tag === 'sus' ? '?' : '✓', bx, r.y - 5, 8, C.white); bx -= 11; }
-  if (fs) { p.disc(bx, r.y + 1, 3, fs === 2 ? C.warn : '#6fae9a'); p.ring(bx, r.y + 1, 3, C.ink); }
+  const st = status[c.id];
+  const frame = (color: string) => { p.rect(r.x - 2, r.y - 2, r.w + 4, 1, color); p.rect(r.x - 2, r.y + r.h + 1, r.w + 4, 1, color); p.rect(r.x - 2, r.y - 2, 1, r.h + 4, color); p.rect(r.x + r.w + 1, r.y - 2, 1, r.h + 4, color); };
+  if (st === 'lead') frame(Math.sin(t * 6) > 0 ? C.red : '#7a2a1a');
+  else if (st === 'zone') frame('#d98a2b');
+  if (hovered) frame(C.gold);
+  if (fx.note?.comp === c.id && ui.now - fx.note.t0 < 6) { const rr = Math.max(r.w, r.h) / 2 + 6 + Math.sin(t * 8) * 2; p.ring(r.x + r.w / 2, r.y + r.h / 2, rr, C.glow, 2); }
+  p.label(c.short, r.x + r.w / 2, r.y + r.h + 1, 8, hovered ? C.gold : st === 'lead' ? '#ff9a86' : C.cream);
+  if (st === 'pass') p.label('✓', r.x + r.w - 1, r.y - 6, 9, C.ok);
+  if (!job.found[c.id] && (c.acts.length || c.part || c.hand)) sparkle(p, r.x + r.w - 2, r.y + 2, t, c.x % 7);
   const pad = Math.max(0, 14 - Math.min(r.w, r.h)) / 2;
-  region({
-    id, x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2,
-    click: ui.tool === 'wiggle' ? undefined : () => { applyTool({ comp: c.id }); },
-    down: ui.tool === 'wiggle' ? () => { const res = startWiggle(holder.state, c.id); if (!res.ok) toast(res.text, true); } : undefined,
-    up: ui.tool === 'wiggle' ? () => stopWiggle(holder.state) : undefined,
-  });
+  region({ id, x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2, click: () => applyTool({ comp: c.id }) });
 }
 
-function drawTP(p: Painter, tp: TestPoint, job: Job) {
+function drawTP(p: Painter, tp: TestPoint, job: Job, t: number) {
   const x = mx(tp.x), y = my(tp.y);
-  const st = tpState(tp, job.found[tp.id]?.tp);
+  const r = job.found[tp.id]?.tp;
+  const st = tpState(tp, r);
   const color = [tp.kind === 'beat' || tp.kind === 'amp' ? '#9fc3bd' : C.brass, C.ok, C.warn, C.red][st];
   const id = 't:' + tp.id;
   p.disc(x, y, 5, C.ink);
   p.disc(x, y, 4, color);
   p.rect(x - 1, y - 2, 2, 1, 'rgba(255,255,255,0.6)');
-  if (ui.hover === id) p.ring(x, y, 7, C.gold);
-  const r = job.found[tp.id]?.tp;
+  if (ui.hover === id) { p.ring(x, y, 7, C.gold); p.label(tp.label, x, y - 18, 8, C.gold); }
   if (r) p.label(tpText(tp, r), x, y + 6, 8, color);
+  else sparkle(p, x + 5, y - 5, t, tp.x % 5);
   region({ id, x: x - 8, y: y - 8, w: 16, h: 16, click: () => applyTool({ tp: tp.id }) });
 }
 
-function drawHoverInfo(p: Painter, def: ItemDef, job: Job, target: Comp | TestPoint) {
-  const isComp = 'shape' in target;
-  const lines: [string, string][] = [];
-  const f = job.found[target.id];
-  if (isComp) {
-    if (f?.look) lines.push(['눈', f.look === 'ok' ? '멀쩡' : MARK_WORD[f.look]]);
-    if (f?.loupe) lines.push(['돋보기', f.loupe === 'ok' ? '흠 없음' : MARK_WORD[f.loupe]]);
-    if (f?.ohm) lines.push(['저항', ohmText(f.ohm) + (typeof target.ohm === 'number' ? `  (정상 ${ohmText({ v: target.ohm })})` : '')]);
-    if (f?.heat !== undefined) lines.push(['온도', HEAT_WORD[f.heat]]);
-    if (f?.feel) lines.push(['손맛', FEEL_WORD[f.feel]]);
-    if (f?.ear) lines.push(['소리', SOUND_WORD[f.ear]]);
-  } else {
-    lines.push(['정상', `${target.expect}${target.unit}`]);
-    if (f?.tp) lines.push(['측정', tpText(target, f.tp)]);
-    if (f?.inject !== undefined) lines.push(['주입', f.inject ? '삐— 들림' : '안 들림']);
-  }
-  const title = isComp ? target.name : target.label;
-  const w = Math.max(90, p.measure(title, 10, 700) + 16, ...lines.map(([a, b]) => p.measure(a + '  ' + b, 9) + 20));
-  const h = 18 + lines.length * 13;
-  const x = Math.min(STAGE.x + STAGE.w - w - 4, Math.max(STAGE.x + 4, ui.mouse[0] + 10));
-  const y = Math.min(STAGE.y + STAGE.h - h - 20, Math.max(STAGE.y + 4, ui.mouse[1] - h - 8));
-  p.panel(x, y, w, h, C.paper);
-  p.text(title, x + 7, y + 3, 10, C.ink, 'left', 700);
-  lines.forEach(([a, b], i) => { p.text(a, x + 7, y + 17 + i * 13, 9, '#6b6450', 'left', 700); p.text(b, x + 50, y + 17 + i * 13, 9, C.ink, 'left', 500); });
-  void def;
-}
-
-/* ---------- 추리판 ---------- */
-function drawFlow(p: Painter, def: ItemDef, job: Job) {
-  const F = FLOW;
-  p.panel(F.x, F.y, F.w, F.h, '#1f2f28');
-  p.text('추리판', F.x + 8, F.y + 4, 11, C.gold, 'left', 700);
-  p.text('왼쪽에서 오른쪽으로 흐른다', F.x + F.w - 8, F.y + 6, 8, C.sage, 'right');
-  // 줄 나누기: 한 줄에 최대 6칸
-  type Node = { id: string; row: number; idx: number; line: number; col: number; per: number };
-  const nodes: Node[] = [];
-  let line = 0;
-  def.flow.forEach((row, ri) => {
-    const lines = Math.ceil(row.length / 6), per = Math.ceil(row.length / lines);
-    row.forEach((id, i) => nodes.push({ id, row: ri, idx: i, line: line + Math.floor(i / per), col: i % per, per }));
-    line += lines;
-  });
-  const tutorialRoom = holder.state.tutorial >= 0 && job.id === 'j1' ? 54 : 0;
-  const lineH = Math.min(34, (F.h - 24 - tutorialRoom) / line);
-  const pos = (n: Node) => ({ x: F.x + 12 + (F.w - 24) * (n.col + 0.5) / n.per, y: F.y + 26 + n.line * lineH + lineH / 2 - 5 });
-  // 의심 구간: 정상 측정점(또는 전원) 뒤에서 처음 끊긴 측정점까지
-  const suspect = new Set<string>();
-  def.flow.forEach((row, ri) => {
-    let lastGood = ri === 0 ? -1 : -2;
-    row.forEach((id, i) => {
-      const tp = def.tps.find(x => x.id === id);
-      if (!tp) return;
-      const st = tpState(tp, job.found[id]?.tp);
-      if (st === 1) lastGood = i;
-      else if (st >= 2 && lastGood >= -1) { for (let k = lastGood + 1; k <= i; k++) suspect.add(`${ri}:${k}`); lastGood = -3; }
-    });
-  });
-  for (let i = 1; i < nodes.length; i++) {
-    const a = nodes[i - 1], b = nodes[i];
-    if (a.row !== b.row) continue;
-    const pa = pos(a), pb = pos(b);
-    const sus = suspect.has(`${b.row}:${b.idx}`);
-    p.line(pa.x, pa.y, pb.x, pb.y, sus ? C.warn : a.line !== b.line ? '#3d5547' : C.moss, sus ? 2 : 1);
-  }
-  for (const n of nodes) {
-    const { x, y } = pos(n);
-    const id = n.id;
-    const comp = compOf(def, id);
-    const tp = def.tps.find(t2 => t2.id === id);
-    const sus = suspect.has(`${n.row}:${n.idx}`);
-    if (comp) {
-      const fs = findingState(job.found[id], comp.ohm);
-      const tag = job.tags[id];
-      const can = reachable(job, comp);
-      const edge = tag === 'sus' ? C.red : tag === 'ok' ? C.ok : sus ? C.warn : '#55705f';
-      p.box(x - 11, y - 9, 22, 18, can ? '#2c4237' : '#1a2621', edge);
-      p.g.save(); p.g.beginPath(); p.g.rect(x - 10, y - 8, 20, 16); p.g.clip();
-      drawPart(p, comp, { x: x - 9, y: y - 7, w: 18, h: 14 }, {}, job.ctx, 0);
-      p.g.restore();
-      if (fs) p.disc(x + 10, y - 8, 3, fs === 2 ? C.warn : '#6fae9a');
-      if (tag) p.label(tag === 'sus' ? '?' : '✓', x - 10, y - 14, 9, tag === 'sus' ? C.red : C.ok);
-      p.text(comp.short, x, y + 10, 8, can ? C.cream : '#6b7d73', 'center', 700);
-      const hid = 'fc:' + id;
-      if (ui.hover === hid) p.ring(x, y, 14, C.gold);
-      region({ id: hid, x: x - 14, y: y - 11, w: 28, h: 30, click: () => { if (!reachable(job, comp)) return toast(comp.layer === 2 ? '섀시를 빼야 닿습니다' : comp.front ? '덮개를 닫아야 닿습니다' : '덮개를 열어야 닿습니다', true); if (ui.tool === 'wiggle') return toast('흔들기는 작업대에서 누르고 계세요'); applyTool({ comp: id }); } });
-    } else if (tp) {
-      const r = job.found[id]?.tp;
-      const st = tpState(tp, r);
-      const color = [tp.kind === 'beat' || tp.kind === 'amp' ? '#9fc3bd' : C.brass, C.ok, C.warn, C.red][st];
-      p.disc(x, y, 6, C.ink); p.disc(x, y, 5, color);
-      if (r) p.text(tp.kind === 'beat' ? (st === 1 ? '고름' : st === 3 ? '없음' : '절뚝') : `${r.v}${tp.unit}`, x, y + 8, 8, color, 'center', 700);
-      else p.text(tp.label, x, y + 8, 7, C.sage, 'center', 500);
-      const hid = 'ft:' + id;
-      if (ui.hover === hid) p.ring(x, y, 9, C.gold);
-      region({ id: hid, x: x - 12, y: y - 10, w: 24, h: 28, click: () => { if (!visible(job, tp.layer)) return toast('덮개를 열어야 닿습니다', true); applyTool({ tp: id }); } });
+/* ---------- 용의자 보드 ---------- */
+function drawSuspects(p: Painter, def: ItemDef, job: Job, status: Record<string, Status>) {
+  const X = 412, Y = 22, W = 224, H = 160;
+  p.panel(X, Y, W, H, '#7a5a3a', '#2b1a0e');
+  for (let i = 0; i < 30; i++) p.rect(X + 4 + ((i * 53) % (W - 8)), Y + 18 + ((i * 29) % (H - 22)), 2, 1, '#6b4c30');
+  p.text('용의자 — 눌러서 범인 지목', X + 8, Y + 4, 10, C.cream, 'left', 700);
+  const list = suspects(def);
+  const cols = 2, cw = (W - 16) / cols, ch = Math.min(32, (H - 24) / Math.ceil(list.length / cols));
+  list.forEach((c, i) => {
+    const x = X + 6 + (i % cols) * (cw + 4), y = Y + 20 + Math.floor(i / cols) * ch;
+    const st = status[c.id];
+    const can = reachable(job, c);
+    const id = 's:' + c.id;
+    const hov = ui.hover === id;
+    p.box(x, y, cw - 4, ch - 3, hov ? '#fff6d8' : can ? '#efe6c8' : '#bdb391', '#3a2a10');
+    p.rect(x + cw / 2 - 4, y - 1, 4, 3, C.red);
+    p.box(x + 3, y + 3, 24, ch - 9, '#2c3a33', '#1a2621');
+    p.g.save(); p.g.beginPath(); p.g.rect(x + 4, y + 4, 22, ch - 11); p.g.clip();
+    drawPart(p, c, { x: x + 4, y: y + 4, w: 22, h: ch - 11 }, {}, job.ctx, 0);
+    p.g.restore();
+    p.text(c.short, x + 31, y + 4, 9, can ? C.ink : '#6b6450', 'left', 700);
+    if (!can) p.text(c.front ? '덮개 닫고' : '덮개 안', x + 31, y + 15, 8, '#6b6450', 'left', 500);
+    const [word, color] = STAMP[st];
+    if (word) {
+      const sw = p.measure(word, 9, 700) + 8;
+      p.box(x + cw - 8 - sw, y + ch - 17, sw, 12, 'rgba(255,255,255,0.2)', color);
+      p.text(word, x + cw - 8 - sw / 2, y + ch - 16, 9, color, 'center', 700);
     }
-  }
+    region({ id, x, y, w: cw - 4, h: ch - 3, click: () => {
+      if (!can) return toast(c.layer === 2 ? '섀시를 빼야 손이 닿는다' : c.front ? '덮개를 닫아야 손이 닿는다' : '덮개를 열어야 손이 닿는다', true);
+      ui.overlay = { kind: 'accuse', comp: c.id }; sfx('pop');
+    } });
+  });
 }
 
-/* ---------- 계기판 ---------- */
-function needleTarget(t: number) {
-  const m = ui.meter;
-  if (!m) return 0;
-  const dt = t - m.t0;
-  let pos = 0;
-  if (m.mode === 'Ω') {
-    if (m.cap === 'kick') pos = dt < 0.12 ? dt / 0.12 * 0.95 : 0.95 * Math.exp(-(dt - 0.12) * 1.3);
-    else if (m.cap === 'weak') pos = dt < 0.12 ? dt / 0.12 * 0.35 : 0.35 * Math.exp(-(dt - 0.12) * 4);
-    else if (m.cap === 'short') pos = 0.97;
-    else if (m.cap === 'none') pos = 0;
-    else if (m.value === Infinity) pos = 0;
-    else { const ref = Math.max(1, m.expect > 0 ? m.expect : 1); pos = 1 / (1 + m.value / ref); }
-    if (m.flicker) pos = Math.sin(t * 17) > 0.2 ? pos : 0.02 + Math.random() * 0.05;
-  } else if (m.mode === 'beat') pos = m.value ? 0.7 : 0;
-  else pos = Math.min(1, (m.value / (m.expect || 1)) * 0.7);
-  if (m.shaky) pos += Math.sin(t * 40) * 0.04;
-  return Math.max(0, Math.min(1, pos));
+/* ---------- 단서 수첩 ---------- */
+const ICON_TOOL: Record<Clue['icon'], string> = { look: 'look', tester: 'volt', ear: 'ear', hand: 'touch', shake: 'wiggle', amp: 'look' };
+function drawNotebook(p: Painter, clues: Clue[]) {
+  const X = 412, Y = 186, W = 224, H = 106;
+  p.panel(X, Y, W, H, C.paper, '#3a2a10');
+  for (let y = Y + 18; y < Y + H; y += 17) p.rect(X + 2, y, W - 4, 1, '#cfc49e');
+  p.text(`단서 수첩  ${clues.length}`, X + 8, Y + 3, 10, C.ink, 'left', 700);
+  if (!clues.length) { p.text('살펴보고 재면 단서가 쌓인다', X + 8, Y + 26, 9, '#6b6450'); p.text('반짝이는 곳부터 조사하자', X + 8, Y + 42, 9, '#6b6450'); return; }
+  const recent = clues.slice(-5).reverse();
+  recent.forEach((c, i) => {
+    const y = Y + 19 + i * 17;
+    const color = c.verdict === 'lead' ? C.red : c.verdict === 'pass' ? '#3f8a3a' : c.verdict === 'zone' ? '#d98a2b' : '#8a8064';
+    p.rect(X + 4, y + 1, 3, 15, color);
+    const g = p.g; g.save(); g.translate(X + 10, y + 1); g.scale(0.6, 0.6); drawToolIcon(p, ICON_TOOL[c.icon], 0, 0); g.restore();
+    p.text(c.title, X + 28, y + 1, 9, C.ink, 'left', 700);
+    p.text(c.means, X + 28, y + 9, 7, '#5b5644', 'left', 500);
+    region({ id: 'cl:' + c.key, x: X + 2, y, w: W - 4, h: 17 });
+  });
 }
-
-function drawMeter(p: Painter, t: number) {
-  const M = METER;
-  p.panel(M.x, M.y, M.w, M.h, '#d9a443', '#3a2a10');
-  p.rect(M.x + 1, M.y + M.h - 6, M.w - 2, 5, '#b9852f');
-  const fx = M.x + 6, fy = M.y + 6, fw = 124, fh = 74;
-  p.box(fx, fy, fw, fh, '#f2ead0', '#3a2a10');
-  const cx = fx + fw / 2, cy = fy + fh - 8, rad = 54;
-  const ang = (u: number) => Math.PI * (1.18 + 0.64 * u);
-  for (let i = 0; i <= 20; i++) { const a = ang(i / 20); const r1 = i % 5 ? rad - 3 : rad - 6; p.line(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, '#3a2a10'); }
-  const m = ui.meter;
-  const band = !m ? null : m.mode === 'Ω' ? (m.cap ? null : m.expect < 0 ? null : m.expect >= 1 ? [0.42, 0.58] : [0.72, 1]) : m.mode === 'beat' ? null : [0.6, 0.8];
-  if (band) for (let u = band[0]; u <= band[1]; u += 0.005) { const a = ang(u); for (let k = 0; k < 4; k++) p.rect(cx + Math.cos(a) * (rad + 2 + k * 0.6), cy + Math.sin(a) * (rad + 2 + k * 0.6), 1, 1, '#4a9a4a'); }
-  const target = needleTarget(t);
-  ui.needle += (target - ui.needle) * 0.25;
-  const a = ang(ui.needle);
-  p.line(cx, cy, cx + Math.cos(a) * (rad - 4), cy + Math.sin(a) * (rad - 4), C.red, 2);
-  p.disc(cx, cy, 4, '#3a2a10');
-  p.text(m?.mode === 'Ω' ? 'Ω  ∞ ← → 0' : m?.mode === 'beat' ? '박자' : m?.mode === 'amp' ? '진폭' : m?.mode === 'inject' ? '삐— 크기' : 'V', cx, fy + 3, 8, '#3a2a10', 'center', 700);
-  // 오른쪽 숫자창
-  const dx = M.x + 136, dy = M.y + 8;
-  p.box(dx, dy, 80, 30, '#2a3a2a', '#101810');
-  const digits = !m ? '----' : m.mode === 'Ω' ? (m.cap ? (m.cap === 'short' ? '0.5' : 'C') : m.value === Infinity ? 'oL' : fmt(m.value)) : m.mode === 'beat' ? (m.value ? m.value.toFixed(2) : '0') : m.mode === 'inject' ? (m.value ? fmt(m.value * 10) : '0') : fmt(m.value);
-  p.seg(digits.padStart(4, ' ').slice(-5), dx + 6, dy + 6, 18, (m?.flicker && Math.sin(t * 17) < 0.2) ? '#2f4a2f' : '#9cf08a', '#2f4a2f');
-  p.text(m?.unit ?? '', dx + 77, dy + 18, 9, '#9cf08a', 'right', 700);
-  if (m) {
-    p.text(m.label, dx, dy + 34, 10, '#2a1a05', 'left', 700);
-    const judge = m.mode === 'beat' ? (m.value === 0 ? '멈춤' : Math.abs((m.b ?? 0) - m.value) > 0.05 ? `똑${m.value} 딱${m.b} 불균일` : '고른 박자') : m.mode === 'Ω' && m.cap ? capWord(m.cap) : band ? (target >= band[0] - 0.02 && target <= band[1] + 0.02 ? '정상 범위' : target < 0.05 ? (m.mode === 'Ω' ? '끊김 ∞' : '없음!') : target < band[0] ? '낮음' : '높음') : m.mode === 'Ω' ? '정상값 수첩 참고' : '';
-    p.text(judge, dx, dy + 48, 9, judge.includes('정상') || judge.includes('고른') || judge.includes('돌아옴') ? '#1f5a1f' : '#8a1f10', 'left', 700);
-    if (m.shaky) p.text('바늘 떨림', dx, dy + 60, 9, '#8a1f10', 'left', 700);
-  } else { p.text('테스터를 대면', dx, dy + 36, 9, '#3a2a10', 'left', 700); p.text('바늘이 움직인다', dx, dy + 49, 9, '#3a2a10', 'left', 700); }
-}
-function capWord(c: string) { return c === 'kick' ? '튀었다 돌아옴(정상)' : c === 'weak' ? '조금만 튐' : c === 'none' ? '꿈쩍 안 함' : '붙어버림!'; }
-function fmt(v: number) { return v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1).replace(/\.0$/, '') : v.toFixed(2).replace(/0$/, ''); }
 
 /* ---------- 조작 줄 ---------- */
 function drawControls(p: Painter, def: ItemDef, job: Job) {
@@ -486,7 +398,6 @@ function drawControls(p: Painter, def: ItemDef, job: Job) {
     if (job.open < max) button(p, 'open', x, y, job.open > 0 ? coverW / 2 - 2 : coverW, h, job.open === 0 ? `${def.coverLabel} 열기` : '섀시 빼기', () => openCover(job.open + 1), { kind: 'quiet', size: 9, sub: '5분' });
     if (job.open > 0) button(p, 'close', job.open < max ? x + coverW / 2 : x, y, job.open < max ? coverW / 2 : coverW, h, '닫기', () => openCover(job.open - 1), { kind: 'quiet', size: 9, sub: '3분' });
   }
-  button(p, 'watch', 412, y, 224, h, '켜 두고 10분 지켜보기', () => { const r = watch(state); if (!r.ok) toast(r.text, true); else toast('10분 지켜봤다'); }, { kind: 'quiet', size: 10, icon: (ix, iy) => drawToolIcon(p, 'clock', ix, iy) });
 }
 
 /* ---------- 공구함 ---------- */
@@ -495,32 +406,37 @@ function drawToolbar(p: Painter, job: Job | null) {
   p.rect(0, 294, 640, 66, '#3a2a1c');
   p.rect(0, 294, 640, 2, '#5b4330');
   TOOLS.forEach((tool, i) => {
-    const x = 4 + i * 42, y = 298;
-    const locked = tool.needs && !state.tools.includes(tool.needs);
+    const x = 4 + i * 58, y = 298;
     const on = ui.tool === tool.id;
     const hov = ui.hover === 'tool:' + tool.id;
-    p.box(x, y, 40, 58, on ? C.gold : hov ? '#5b4a38' : '#4a3a2a', on ? '#fff3c4' : '#24180e');
-    if (!locked) drawToolIcon(p, tool.id, x + 8, y + 5);
-    else { p.disc(x + 20, y + 16, 7, '#24180e'); p.rect(x + 16, y + 16, 8, 7, '#8a7a60'); p.ring(x + 20, y + 14, 3, '#8a7a60'); }
-    p.text(tool.name, x + 20, y + 31, 10, on ? C.ink : locked ? '#8a7a60' : C.cream, 'center', 700);
-    const cost = TOOL_TIME[tool.id];
-    p.text(locked ? '공구상' : cost ? `${cost}분` : '', x + 20, y + 44, 8, on ? '#4d3a14' : '#b9a27a', 'center', 500);
-    region({ id: 'tool:' + tool.id, x, y, w: 40, h: 58, click: () => { if (locked) return toast('장부·공구상에서 살 수 있습니다', true); ui.tool = tool.id; sfx('click', 0.4); } });
+    p.box(x, y, 56, 58, on ? C.gold : hov ? '#5b4a38' : '#4a3a2a', on ? '#fff3c4' : '#24180e');
+    const icon = tool.id === 'tester' ? 'volt' : tool.id === 'look' && state.tools.includes('loupe') ? 'loupe' : tool.id;
+    drawToolIcon(p, icon, x + 16, y + 6);
+    p.text(tool.name, x + 28, y + 33, 11, on ? C.ink : C.cream, 'center', 700);
+    region({ id: 'tool:' + tool.id, x, y, w: 56, h: 58, click: () => { ui.tool = tool.id; sfx('click', 0.4); } });
   });
-  const bx = 512;
-  const due = job ? job.open * 3 + 3 : 0;
-  button(p, 'handback', bx, 298, 124, 32, '돌려주기', () => {
+  const hx = 298;
+  const lv = job?.hints ?? 0;
+  button(p, 'hint', hx, 298, 100, 28, '할아버지 쪽지', () => {
+    const r = hint(state);
+    if (!r.ok) return toast(r.text, true);
+    fx.note = { text: r.text, t0: ui.now, comp: r.comp };
+    sfx('pop');
+  }, { kind: 'quiet', size: 10, disabled: !job, sub: `힌트 ${lv}/3 · 5분` });
+  button(p, 'watch', hx, 330, 100, 26, '10분 지켜보기', () => { const r = watch(state); if (!r.ok) toast(r.text, true); else toast('10분 동안 켜 두고 지켜봤다'); }, { kind: 'quiet', size: 10, disabled: !job });
+  const bx = 404;
+  button(p, 'handback', bx, 298, 232, 30, '돌려주기', () => {
     const r = handBack(state);
     if ('kind' in r) { ui.counter = { kind: 'return', outcome: r }; ui.scene = 'counter'; ui.popups = []; ui.meter = null; sfx(r.kind === 'paid' ? 'coin' : 'bad'); }
     else toast(r.text, true);
-  }, { kind: 'primary', disabled: !job, size: 13, sub: job ? `조립·확인 ${due}분` : undefined });
-  button(p, 'shelf', bx, 334, 60, 22, '선반', () => { ui.overlay = { kind: 'shelf' }; }, { kind: 'quiet', size: 10 });
-  button(p, 'giveup', bx + 64, 334, 60, 22, '포기', () => { ui.overlay = { kind: 'giveup' }; }, { kind: 'quiet', size: 10, disabled: !job });
+  }, { kind: 'primary', disabled: !job, size: 13, sub: job ? (job.faults.length ? '손님이 켜 보고 판단한다' : '자물쇠를 다 풀었다!') : undefined });
+  button(p, 'shelf', bx, 332, 114, 24, '선반 · 다른 물건', () => { ui.overlay = { kind: 'shelf' }; }, { kind: 'quiet', size: 10 });
+  button(p, 'giveup', bx + 118, 332, 114, 24, '포기하고 돌려보내기', () => { ui.overlay = { kind: 'giveup' }; }, { kind: 'quiet', size: 9, disabled: !job });
 }
 
-/* ---------- 말풍선들 ---------- */
+/* ---------- 연출 ---------- */
 function drawPopups(p: Painter, t: number) {
-  ui.popups = ui.popups.filter(pp => t - pp.t0 < (pp.kind === 'closeup' ? 4 : 2.4));
+  ui.popups = ui.popups.filter(pp => t - pp.t0 < (pp.kind === 'closeup' ? 3.5 : 2.4));
   for (const pp of ui.popups) {
     const age = t - pp.t0;
     if (pp.kind === 'closeup') {
@@ -529,166 +445,188 @@ function drawPopups(p: Painter, t: number) {
       const y = Math.max(STAGE.y + r + 6, Math.min(STAGE.y + STAGE.h - r - 30, pp.y - 30));
       p.line(pp.x, pp.y, x, y, C.cream);
       drawCloseup(p, pp.shape, pp.mark, x, y, r);
-      const tw = p.measure(pp.text, 10, 700) + 12;
-      p.panel(x - tw / 2, y + r + 5, tw, 16, pp.mark === 'ok' ? C.paper : '#f3d2c4');
-      p.text(pp.text, x, y + r + 7, 10, pp.mark === 'ok' ? C.ink : '#7a1a0a', 'center', 700);
+      bubbleAt(p, x, y + r + 20, pp.text, pp.mark !== 'ok');
     } else if (pp.kind === 'sound') {
-      const word = SOUND_WORD[pp.sound];
-      const bad = BAD_SOUND.has(pp.sound);
       for (let i = 0; i < 3; i++) { const rr = 6 + ((age * 30 + i * 8) % 24); p.ring(pp.x, pp.y - 6, rr, `rgba(255,230,160,${Math.max(0, 0.6 - rr / 40)})`); }
-      bubble(p, pp.x, pp.y - 22 - age * 6, word, bad);
+      bubbleAt(p, pp.x, pp.y - 8 - age * 6, SOUND_WORD[pp.sound], BAD_SOUND.has(pp.sound));
     } else if (pp.kind === 'touch') {
       const words = [HEAT_WORD[pp.heat], pp.feel ? FEEL_WORD[pp.feel] : ''].filter(Boolean).join(' · ');
       if (pp.heat > 0) for (let i = 0; i < 3; i++) p.rect(pp.x - 8 + i * 7, pp.y - 8 - ((age * 20 + i * 5) % 14), 2, 5, pp.heat === 2 ? C.red : C.warn);
-      bubble(p, pp.x, pp.y - 26, words, pp.heat === 2 || !!pp.feel && ['stiff', 'sticky', 'catch', 'free', 'loose', 'hard', 'slack', 'mushy'].includes(pp.feel));
-    } else if (pp.kind === 'beep') {
-      if (pp.level > 0) for (let i = 0; i < 3; i++) { const rr = 6 + ((age * 40 + i * 9) % 28) * pp.level; p.ring(pp.x, pp.y + 10, rr, 'rgba(160,240,140,0.6)'); }
-      bubble(p, pp.x, pp.y - 14, pp.level === 0 ? '…조용' : pp.level < 0.5 ? '삐… (작다)' : pp.torn ? '삐— 지지직' : '삐—!', pp.level < 0.5 || !!pp.torn);
+      bubbleAt(p, pp.x, pp.y - 12, words, pp.heat === 2 || !!pp.feel && BAD_FEEL.has(pp.feel));
     }
   }
   if (ui.toast && t - ui.toast.t0 < 2.6) {
     const tw = p.measure(ui.toast.text, 11, 700) + 20;
-    const x = STAGE.x + STAGE.w / 2 - tw / 2, y = STAGE.y + 6;
+    const x = STAGE.x + STAGE.w / 2 - tw / 2, y = STAGE.y + STAGE.h - 42;
     p.panel(x, y, tw, 20, ui.toast.bad ? '#f3c9b9' : C.paper);
     p.text(ui.toast.text, x + tw / 2, y + 3, 11, ui.toast.bad ? '#7a1a0a' : C.ink, 'center', 700);
   }
 }
 
-function bubble(p: Painter, x: number, y: number, text: string, bad: boolean) {
+function bubbleAt(p: Painter, x: number, y: number, text: string, bad: boolean) {
   const tw = p.measure(text, 11, 700) + 14;
   const bx = Math.max(STAGE.x + 2, Math.min(STAGE.x + STAGE.w - tw - 2, x - tw / 2));
   const by = Math.max(STAGE.y + 2, y - 18);
   p.panel(bx, by, tw, 18, bad ? '#f3d2c4' : C.paper);
-  p.rect(Math.max(bx + 4, Math.min(bx + tw - 8, x - 2)), by + 17, 5, 3, bad ? '#f3d2c4' : C.paper);
   p.text(text, bx + tw / 2, by + 2, 11, bad ? '#7a1a0a' : C.ink, 'center', 700);
 }
 
-/* ---------- 수리 손맛 ---------- */
-export function drawRepair(p: Painter, t: number) {
+/** 단서를 얻는 순간: 카드가 내려와 도장이 찍힌다 */
+function drawBanner(p: Painter, t: number) {
+  if (ui.overlay) return;
+  while (fx.banners.length && fx.banners[0].t0 && t - fx.banners[0].t0 > 1.9) fx.banners.shift();
+  const b = fx.banners[0];
+  if (!b) return;
+  if (!b.t0) { b.t0 = t; sfx(b.clue.verdict === 'lead' ? 'good' : 'pop', 0.6); }
+  const age = t - b.t0;
+  const drop = Math.min(1, age * 6);
+  const w = 260, h = 46;
+  const x = STAGE.x + (STAGE.w - w) / 2, y = STAGE.y + 6 - (1 - drop) * 40;
+  p.panel(x, y, w, h, C.paper, '#3a2a10');
+  p.text('단서 획득!', x + 8, y + 4, 9, '#8a6a1f', 'left', 700);
+  p.text(b.clue.title, x + 8, y + 15, 11, C.ink, 'left', 700);
+  p.text(b.clue.means, x + 8, y + 30, 9, '#5b5644', 'left', 500);
+  const verdict = b.clue.verdict === 'info' ? 'info' : b.clue.verdict;
+  const [word, color] = STAMP[verdict];
+  if (age > 0.35) {
+    const s = Math.max(1, 1.8 - (age - 0.35) * 5);
+    const sw = (p.measure(word, 12, 700) + 12) * s;
+    const sx = x + w - sw / 2 - 30, sy = y + h / 2;
+    p.box(sx - sw / 2, sy - 9 * s, sw, 18 * s, 'rgba(255,255,255,0.15)', color);
+    p.text(word, sx, sy - 7 * s, 12 * s, color, 'center', 700);
+  }
+}
+
+/** 할아버지 쪽지 */
+function drawNote(p: Painter, def: ItemDef, t: number) {
+  const n = fx.note;
+  if (!n || t - n.t0 > 6 || ui.overlay) return;
+  const w = 250;
+  const x = STAGE.x + (STAGE.w - w) / 2, y = STAGE.y + 60;
+  p.panel(x, y, w, 44, '#fff3c4', '#8a6a1f');
+  p.text('할아버지 쪽지', x + 8, y + 4, 9, '#8a6a1f', 'left', 700);
+  p.wrap(n.text, x + 8, y + 17, w - 16, 11, C.ink, 13, 700);
+  void def;
+}
+
+/* ---------- 계기판 (측정점 옆에 뜬다) ---------- */
+function needleTarget(t: number) {
+  const m = ui.meter;
+  if (!m) return 0;
+  const dt = t - m.t0;
+  let pos = 0;
+  if (m.mode === 'Ω') {
+    if (m.cap === 'kick') pos = dt < 0.12 ? dt / 0.12 * 0.95 : 0.95 * Math.exp(-(dt - 0.12) * 1.3);
+    else if (m.cap === 'weak') pos = dt < 0.12 ? dt / 0.12 * 0.35 : 0.35 * Math.exp(-(dt - 0.12) * 4);
+    else if (m.cap === 'short') pos = 0.97;
+    else if (m.cap === 'none' || m.value === Infinity) pos = 0;
+    else { const ref = Math.max(1, m.expect > 0 ? m.expect : 1); pos = 1 / (1 + m.value / ref); }
+    if (m.flicker) pos = Math.sin(t * 17) > 0.2 ? pos : 0.03;
+  } else pos = Math.min(1, (m.value / (m.expect || 1)) * 0.7);
+  if (m.shaky) pos += Math.sin(t * 40) * 0.04;
+  return Math.max(0, Math.min(1, pos));
+}
+
+function drawMeterPopup(p: Painter, t: number) {
+  const at = fx.meterAt, m = ui.meter;
+  if (!at || !m || t - at.t0 > 3.2) return;
+  const w = 128, h = 74;
+  const x = Math.max(STAGE.x + 4, Math.min(STAGE.x + STAGE.w - w - 4, at.x + 14));
+  const y = Math.max(STAGE.y + 4, Math.min(STAGE.y + STAGE.h - h - 20, at.y - h - 6));
+  p.line(at.x, at.y, x + 10, y + h, C.red);
+  p.panel(x, y, w, h, '#d9a443', '#3a2a10');
+  p.box(x + 4, y + 4, 70, 46, '#f2ead0', '#3a2a10');
+  const cx = x + 39, cy = y + 46, rad = 34;
+  const ang = (u: number) => Math.PI * (1.18 + 0.64 * u);
+  for (let i = 0; i <= 10; i++) { const a = ang(i / 10); p.line(cx + Math.cos(a) * (rad - 3), cy + Math.sin(a) * (rad - 3), cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, '#3a2a10'); }
+  const band = m.mode === 'Ω' ? (m.cap ? (m.cap === 'kick' || m.cap === 'weak' || m.cap === 'none' || m.cap === 'short' ? null : null) : m.expect < 0 ? null : m.expect >= 1 ? [0.42, 0.58] : [0.72, 1]) : [0.6, 0.8];
+  if (band) for (let u = band[0]; u <= band[1]; u += 0.01) { const a = ang(u); p.rect(cx + Math.cos(a) * (rad + 2), cy + Math.sin(a) * (rad + 2), 2, 2, '#4a9a4a'); }
+  const target = needleTarget(t);
+  ui.needle += (target - ui.needle) * 0.25;
+  const a = ang(ui.needle);
+  p.line(cx, cy, cx + Math.cos(a) * (rad - 3), cy + Math.sin(a) * (rad - 3), C.red, 2);
+  p.disc(cx, cy, 3, '#3a2a10');
+  const val = m.mode === 'Ω' ? (m.cap ? capWord(m.cap) : ohmText({ v: m.value, flicker: m.flicker })) : `${m.value}${m.unit}`;
+  p.text(val, x + 100, y + 8, 11, '#2a1a05', 'center', 700);
+  p.text(m.label, x + 100, y + 24, 8, '#3a2a10', 'center', 700);
+  const ok = band ? target >= band[0] - 0.03 && target <= band[1] + 0.03 : m.cap === 'kick';
+  const verdict = ok ? '정상 ✓' : m.mode === 'Ω' ? (m.value === Infinity && !m.cap ? '끊김 ✗' : m.expect < 0 && !m.cap ? '기록' : '이상 ✗') : m.value === 0 ? '없음 ✗' : '이상 ✗';
+  p.box(x + 4, y + 54, w - 8, 16, ok ? '#cfe8c0' : verdict === '기록' ? '#e8e0c4' : '#f3c9b9', '#3a2a10');
+  p.text(verdict, x + w / 2, y + 55, 11, ok ? '#1f5a1f' : '#7a1a0a', 'center', 700);
+}
+function capWord(c: string) { return c === 'kick' ? '튀었다 돌아옴' : c === 'weak' ? '조금만 튐' : c === 'none' ? '꿈쩍 안 함' : '붙어버림'; }
+
+/* ---------- 범인 지목 · 자물쇠 ---------- */
+export function actionsOf(c: Comp): Action[] {
+  const acts = [...c.acts];
+  if (c.part && !acts.includes('replace')) acts.unshift('replace');
+  return acts;
+}
+
+export function drawAccuse(p: Painter, t: number) {
   const ov = ui.overlay;
-  if (ov?.kind !== 'repair') return;
+  if (ov?.kind !== 'accuse') return;
   const state = holder.state;
-  const job = activeJob(state)!;
+  const job = activeJob(state);
+  if (!job) { ui.overlay = null; return; }
   const def = item(job.itemId);
   const comp = compOf(def, ov.comp)!;
-  const X = 64, Y = 78, Wd = 280, Hd = 160;
-  p.rect(STAGE.x, STAGE.y, STAGE.w, STAGE.h, 'rgba(8,12,10,0.55)');
+  p.rect(STAGE.x, STAGE.y, STAGE.w, STAGE.h, 'rgba(8,12,10,0.6)');
   p.clearText(STAGE.x, STAGE.y, STAGE.w, STAGE.h);
-  region({ id: 'rp-bg', x: 0, y: 0, w: 640, h: 360 });
+  region({ id: 'acc-bg', x: 0, y: 0, w: 640, h: 360, click: () => { if (ov.t0 && t - ov.t0 > 1.3) ui.overlay = null; } });
+  const X = 54, Y = 70, Wd = 304, Hd = 176;
   p.panel(X, Y, Wd, Hd, C.paper);
-  p.text(`${comp.name} 수리`, X + 10, Y + 6, 12, C.ink, 'left', 700);
-  button(p, 'rp-x', X + Wd - 26, Y + 4, 20, 18, '✕', () => { ui.overlay = null; }, { kind: 'quiet', size: 10 });
-  if (!ov.action) {
+  if (!ov.t0) {
+    p.text('범인 지목', X + 10, Y + 6, 9, '#8a6a1f', 'left', 700);
+    p.text(`${comp.name}이(가) 범인일까?`.replace('이(가)', /[가-힣]$/.test(comp.name) && (comp.name.charCodeAt(comp.name.length - 1) - 0xac00) % 28 ? '이' : '가'), X + 10, Y + 18, 14, C.ink, 'left', 700);
+    p.box(X + 10, Y + 42, 70, 64, '#2c3a33');
+    drawPart(p, comp, { x: X + 14, y: Y + 46, w: 62, h: 56 }, {}, job.ctx, t);
+    p.text('어떻게 고칠까?', X + 92, Y + 44, 10, '#5b5644', 'left', 700);
     const acts = actionsOf(comp);
-    p.text('어떻게 고칠까?  결과는 다시 켜 봐야 안다', X + 10, Y + 24, 9, '#6b6450');
     acts.forEach((a, i) => {
-      const bw = (Wd - 20 - (acts.length - 1) * 6) / acts.length;
-      const bx = X + 10 + i * (bw + 6);
+      const bw = (Wd - 102 - (acts.length - 1) * 4) / acts.length;
       const price = a === 'replace' ? comp.part ?? 0 : 0;
-      button(p, 'rp-' + a, bx, Y + 44, bw, 54, ACTION_NAME[a], () => {
-        const blocked = repairCheck(state, comp.id, a);
-        if (blocked) { toast(blocked.text, true); ui.overlay = null; return; }
-        ov.action = a; ov.progress = 0; ov.msg = '';
-      }, { size: 13, sub: `${repairMinutes(def, a)}분${price ? ' · ' + won(price) : ''}` });
+      button(p, 'acc:' + a, X + 92 + i * (bw + 4), Y + 58, bw, 46, ACTION_NAME[a], () => commitAccuse(a), { kind: 'primary', size: 12, sub: `${repairMinutes(def, a)}분${price ? ' ' + won(price) : ''}` });
     });
-    p.wrap('교체: 확실하지만 돈이 든다.  세척·납땜·주유·조정: 싸지만 맞는 고장에만 듣는다.', X + 10, Y + 108, Wd - 20, 9, '#5b5644');
+    p.wrap('틀리면 시간과 부품값을 쓰고 수리비가 10% 깎인다. 교체는 그 부품의 고장을 다 없애지만 돈이 든다.', X + 10, Y + 116, Wd - 20, 9, '#5b5644', 12);
+    button(p, 'acc-x', X + Wd - 70, Y + Hd - 28, 60, 22, '취소', () => { ui.overlay = null; }, { kind: 'quiet', size: 10 });
     return;
   }
-  const a = ov.action;
-  const finish = () => {
-    const r = repair(state, comp.id, a);
-    ui.overlay = null;
-    ui.popups = [];
-    if (r.ok) { toast(r.text); sfx('good'); } else toast(r.text, true);
-  };
-  const area = { x: X + 10, y: Y + 28, w: Wd - 20, h: 96 };
-  p.box(area.x, area.y, area.w, area.h, '#2c3a33');
-  const help: Record<Action, string> = { replace: '새 부품을 끌어다 자리에 놓으세요', clean: '부품을 문질러 닦으세요', solder: '인두를 누르고 있다가 초록에서 떼세요', oil: '축에 기름을 세 방울', adjust: '손잡이를 끌어 눈금을 가운데로' };
-  p.text(help[a], X + 10, Y + Hd - 30, 10, C.ink, 'left', 700);
-  if (ov.msg) p.text(ov.msg, X + Wd - 10, Y + Hd - 30, 10, C.red, 'right', 700);
-  const bar = (v: number, zone?: [number, number]) => {
-    p.box(X + 10, Y + Hd - 14, Wd - 20, 8, '#3a4440');
-    if (zone) p.rect(X + 11 + zone[0] * (Wd - 22), Y + Hd - 13, (zone[1] - zone[0]) * (Wd - 22), 6, '#4a9a4a');
-    p.rect(X + 11, Y + Hd - 13, Math.min(1, v) * (Wd - 22), 6, zone ? 'rgba(255,200,80,0.8)' : C.gold);
-  };
-  const sim = simulate(job);
-  if (a === 'replace') {
-    const slot = { x: area.x + area.w - 90, y: area.y + 14, w: 70, h: 64 };
-    p.box(slot.x, slot.y, slot.w, slot.h, '#1d2a25', C.warn);
-    p.text('자리', slot.x + slot.w / 2, slot.y + slot.h + 1, 8, C.cream, 'center');
-    const drag = ov.drag ?? [area.x + 20, area.y + 16];
-    p.box(area.x + 14, area.y + 10, 80, 72, '#5b4330');
-    p.text('새 부품', area.x + 54, area.y + 84, 8, C.cream, 'center');
-    drawPart(p, comp, { x: drag[0], y: drag[1], w: 60, h: 56 }, sim.fx, job.ctx, t);
-    region({
-      id: 'rp-new', x: drag[0], y: drag[1], w: 60, h: 56,
-      down: (px, py) => { ov.last = [px - drag[0], py - drag[1]]; },
-      drag: (px, py) => { ov.drag = [px - (ov.last?.[0] ?? 0), py - (ov.last?.[1] ?? 0)]; },
-      up: () => { const d = ov.drag; if (d && d[0] + 30 > slot.x && d[0] + 30 < slot.x + slot.w && d[1] + 28 > slot.y && d[1] + 28 < slot.y + slot.h) finish(); else ov.drag = undefined; },
-    });
-  } else if (a === 'clean') {
-    const r = { x: area.x + area.w / 2 - 50, y: area.y + 10, w: 100, h: 76 };
-    drawPart(p, comp, r, sim.fx, job.ctx, t);
-    const left = Math.round((1 - ov.progress) * 40);
-    for (let i = 0; i < left; i++) p.rect(r.x + ((i * 37) % r.w), r.y + ((i * 23) % r.h), 3, 2, '#6b4a1e');
-    if (ov.progress > 0.2) for (let i = 0; i < 4; i++) p.rect(r.x + ((i * 31 + Math.floor(t * 9) * 13) % r.w), r.y + ((i * 17 + Math.floor(t * 9) * 7) % r.h), 2, 2, C.white);
-    bar(ov.progress);
-    region({
-      id: 'rp-scrub', ...area,
-      down: (px, py) => { ov.last = [px, py]; },
-      drag: (px, py) => { const l = ov.last ?? [px, py]; ov.progress += Math.hypot(px - l[0], py - l[1]) / 900; ov.last = [px, py]; if (ov.progress >= 1) finish(); },
-    });
-  } else if (a === 'solder') {
-    const r = { x: area.x + 30, y: area.y + 20, w: 110, h: 56 };
-    drawPart(p, comp, r, sim.fx, job.ctx, t);
-    const heat = ov.holding ? Math.min(1.2, (t - ov.hold0) / 1.6) : ov.progress;
-    const ix = area.x + 170, iy = area.y + 20;
-    p.rect(ix, iy, 8, 40, '#7a4a2a'); for (let i = 0; i < 14; i++) p.rect(ix - i * 2, iy + 40 + i, 3, 2, C.steel);
-    if (ov.holding && heat > 0.3) for (let i = 0; i < 3; i++) p.rect(ix - 30 + i * 4, iy + 40 - ((t * 30 + i * 7) % 20), 2, 4, 'rgba(230,230,230,0.6)');
-    bar(heat, [0.55, 0.85]);
-    region({
-      id: 'rp-iron', ...area,
-      down: () => { ov.holding = true; ov.hold0 = t; ov.msg = ''; },
-      up: () => {
-        const h2 = Math.min(1.2, (ui.now - ov.hold0) / 1.6);
-        ov.holding = false; ov.progress = h2;
-        if (h2 >= 0.55 && h2 <= 0.85) finish();
-        else ov.msg = h2 < 0.55 ? '덜 녹았다. 다시' : '너무 달궜다. 다시';
-      },
-    });
-  } else if (a === 'oil') {
-    const r = { x: area.x + area.w / 2 - 40, y: area.y + 20, w: 80, h: 60 };
-    drawPart(p, comp, r, sim.fx, job.ctx, t);
-    const drops = Math.round(ov.progress * 3);
-    for (let i = 0; i < drops; i++) p.disc(r.x + 20 + i * 20, r.y + r.h - 6, 3, '#d9a443');
-    p.rect(area.x + area.w / 2 - 3, area.y + 2, 6, 14, '#c9c9c9');
-    bar(ov.progress);
-    region({ id: 'rp-oil', ...area, click: () => { ov.progress = Math.min(1, ov.progress + 1 / 3); sfx('pop', 0.4); if (ov.progress >= 0.99) finish(); } });
-  } else if (a === 'adjust') {
-    const r = { x: area.x + 20, y: area.y + 14, w: 90, h: 68 };
-    drawPart(p, comp, r, sim.fx, job.ctx, t);
-    const gx = area.x + 130, gw = 130, gy = area.y + 30;
-    p.box(gx, gy, gw, 16, '#1d2a25', C.cream);
-    p.rect(gx + gw / 2 - 1, gy - 6, 2, 28, C.ok);
-    const off = ov.progress - ov.target;
-    const needle = gx + gw / 2 + off * gw * 1.6;
-    p.rect(Math.max(gx, Math.min(gx + gw - 3, needle)), gy + 2, 3, 12, Math.abs(off) < 0.05 ? C.ok : C.red);
-    const kx = gx + ov.progress * gw;
-    p.box(kx - 6, gy + 34, 12, 20, C.gold);
-    p.text('손잡이', kx, gy + 56, 8, C.cream, 'center');
-    region({
-      id: 'rp-adjust', x: gx - 10, y: gy - 10, w: gw + 20, h: 80,
-      down: (px) => { ov.progress = Math.max(0, Math.min(1, (px - gx) / gw)); },
-      drag: (px) => { ov.progress = Math.max(0, Math.min(1, (px - gx) / gw)); },
-      up: () => { if (Math.abs(ov.progress - ov.target) < 0.05) finish(); else ov.msg = '아직 어긋났다'; },
-    });
+  // 자물쇠 연출
+  const age = t - ov.t0;
+  const cx = X + Wd / 2, cy = Y + 70;
+  const shake = age < 0.6 ? Math.round(Math.sin(age * 60) * 3) : 0;
+  const ok = (ov.fixed ?? 0) > 0;
+  const open = age > 0.6 && ok;
+  lockIcon(p, cx - 24 + shake, cy - 30 - (open ? Math.min(8, (age - 0.6) * 40) : 0), open, 4);
+  if (age > 0.6) {
+    if (ok) {
+      for (let i = 0; i < 10; i++) { const a = i * 0.63 + age; const r = 30 + (age - 0.6) * 60; p.rect(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6, 3, 3, i % 2 ? C.glow : C.ok); }
+      p.text('딸깍! 자물쇠가 풀렸다', cx, cy + 34, 15, '#1f5a1f', 'center', 700);
+      p.text(job.faults.length ? `남은 자물쇠 ${job.faults.length}개` : '모든 자물쇠를 풀었다! 켜서 확인하고 돌려주자', cx, cy + 56, 10, C.ink, 'center', 700);
+    } else {
+      p.line(cx - 20, cy - 26, cx + 20, cy + 14, C.red, 4); p.line(cx + 20, cy - 26, cx - 20, cy + 14, C.red, 4);
+      p.text('철컥… 이게 아니다', cx, cy + 34, 15, '#7a1a0a', 'center', 700);
+      p.text('수리비 −10%. 단서를 더 모아 보자', cx, cy + 56, 10, C.ink, 'center', 700);
+    }
+    p.text(ov.text ?? '', cx, cy + 74, 9, '#5b5644', 'center', 500);
+    if (age > 1.3) button(p, 'acc-ok', cx - 40, Y + Hd - 30, 80, 24, '확인', () => { ui.overlay = null; }, { kind: 'primary', size: 11 });
   }
 }
 
-export function benchHoverCursor() {
-  const r = regionById(ui.hover);
-  return r ? 'pointer' : 'default';
+function commitAccuse(a: Action) {
+  const ov = ui.overlay;
+  if (ov?.kind !== 'accuse') return;
+  const state = holder.state;
+  const job = activeJob(state)!;
+  if (job.ctx.power && job.itemId !== 'clock') { setCtx(state, { power: false }); toast('플러그를 뽑고 작업했다'); }
+  const blocked = repairCheck(state, ov.comp, a);
+  if (blocked) { toast(blocked.text, true); ui.overlay = null; return; }
+  const r = repair(state, ov.comp, a);
+  ov.action = a; ov.fixed = r.fixed ?? 0; ov.text = r.text; ov.t0 = ui.now;
+  ui.popups = [];
+  sfx('click');
+  setTimeout(() => sfx(ov.fixed ? 'good' : 'bad'), 600);
 }
 
-export function currentTutorial() { return tutorialStep(); }
-void timeLeft;
+export function tutorialTarget(id: string) { return regionById(id); }

@@ -2,7 +2,7 @@ import { Painter, W, H } from '../gfx/painter';
 import { load, newGame, save } from '../game';
 import { setSound, updateSound } from '../audio';
 import { holder, hit, resetRegions, ui, type Region } from './core';
-import { drawBench, drawRepair } from './bench';
+import { drawAccuse, drawBench } from './bench';
 import { drawCounter, drawEnding, drawHud, drawOverlay, drawTitle } from './scenes';
 import { drawTutorial } from './tutorial';
 import { activeJob, simulate } from '../game';
@@ -94,7 +94,7 @@ function frame(t: number) {
   else {
     p.rect(0, 0, W, H, '#16201c');
     drawBench(p, t);
-    drawRepair(p, t);
+    drawAccuse(p, t);
     drawTutorial(p, t);
     drawHud(p);
     const job = activeJob(holder.state);
