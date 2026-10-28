@@ -1,0 +1,19 @@
+{
+  "name": "nopo-repair",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build && node scripts/artifact.mjs",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "esbuild tests/check.ts --bundle --platform=node --format=esm --outfile=tests/.check.mjs --log-level=warning && node tests/.check.mjs",
+    "balance": "esbuild tests/balance.ts --bundle --platform=node --format=esm --outfile=tests/.balance.mjs --log-level=warning && node tests/.balance.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "typescript": "~5.7.3",
+    "vite": "^6.1.0"
+  }
+}
