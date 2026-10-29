@@ -43,7 +43,8 @@ export type Overlay =
   | { kind: 'close' }
   | { kind: 'giveup' }
   | { kind: 'menu' }
-  | { kind: 'accuse'; comp: string; t0?: number; action?: Action; fixed?: number; text?: string; added?: number };
+  | { kind: 'ask' }
+  | { kind: 'accuse'; comp: string; t0?: number; action?: Action; fixed?: number; text?: string; added?: number; ev?: string; verdict?: 'sharp' | 'lucky' };
 
 export type Counter =
   | { kind: 'arrivals'; ids: string[]; i: number }

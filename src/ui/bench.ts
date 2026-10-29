@@ -7,13 +7,13 @@ import { BODY, body, coverPlate, grille, screwHead, type Material } from '../gfx
 import { benchMat, woodStrip } from './backdrops';
 import { drawCloseup, drawCustomer, drawPart, drawToolIcon } from '../gfx/parts';
 import {
-  ACTION_NAME, activeJob, compOf, customerOf, events, handBack, handUse, hint, payFor, reachable, repair, repairCheck,
+  ACTION_NAME, activeJob, compOf, faultOf, customerOf, events, handBack, handUse, hint, payFor, reachable, repair, repairCheck,
   repairMinutes, setCtx, setOpen, simulate, useTool, visible, watch, won,
 } from '../game';
 import { sfx } from '../audio';
 import { button, holder, pan, region, regionById, toast, ui } from './core';
 import { FEEL_WORD, HEAT_WORD, SOUND_WORD, BAD_SOUND, BAD_FEEL, ohmText, tpState, tpText } from './words';
-import { cluesOf, statusOf, suspects, type Clue, type Status } from './clues';
+import { cluesOf, statusOf, supports, suspects, type Clue, type Status } from './clues';
 import { miniActive, setMiniItem, startRepairMini, startScrews } from './mini';
 
 /* ---------- 배치 ---------- */
@@ -64,7 +64,7 @@ const fx = {
   lastJob: '',
 };
 
-const STAMP: Record<Status | 'info', [string, string]> = { lead: ['유력!', C.red], zone: ['의심', '#d98a2b'], pass: ['통과', '#3f8a3a'], none: ['', C.ink], info: ['메모', '#6b6450'] };
+const STAMP: Record<Status | 'info' | 'talk', [string, string]> = { lead: ['유력!', C.red], zone: ['의심', '#d98a2b'], pass: ['통과', '#3f8a3a'], none: ['', C.ink], info: ['메모', '#6b6450'], talk: ['증언', '#3a5a9a'] };
 
 /* ---------- 공구 쓰기 ---------- */
 function use(tool: ToolId, target: { comp?: string; tp?: string }) {
@@ -476,17 +476,18 @@ function drawSuspects(p: Painter, def: ItemDef, job: Job, status: Record<string,
 }
 
 /* ---------- 단서 수첩 ---------- */
-const ICON_TOOL: Record<Clue['icon'], string> = { look: 'look', tester: 'volt', ear: 'ear', hand: 'touch', shake: 'wiggle', amp: 'look' };
+const ICON_TOOL: Record<Clue['icon'], string> = { look: 'look', tester: 'volt', ear: 'ear', hand: 'touch', shake: 'wiggle', amp: 'look', talk: 'talk' };
 function drawNotebook(p: Painter, clues: Clue[]) {
   const X = 412, Y = 186, W = 224, H = 106;
   p.panel(X, Y, W, H, C.paper, '#3a2a10');
   for (let y = Y + 18; y < Y + H; y += 17) p.rect(X + 2, y, W - 4, 1, '#cfc49e');
   p.text(`단서 수첩  ${clues.length}`, X + 8, Y + 3, 10, C.ink, 'left', 700);
+  button(p, 'ask-phone', X + W - 92, Y + 2, 88, 16, '☎ 손님에게 묻기', () => { ui.overlay = { kind: 'ask' }; sfx('pop'); }, { kind: 'quiet', size: 8 });
   if (!clues.length) { p.text('살펴보고 재면 단서가 쌓인다', X + 8, Y + 26, 9, '#6b6450'); p.text('반짝이는 곳부터 조사하자', X + 8, Y + 42, 9, '#6b6450'); return; }
   const recent = clues.slice(-5).reverse();
   recent.forEach((c, i) => {
     const y = Y + 19 + i * 17;
-    const color = c.verdict === 'lead' ? C.red : c.verdict === 'pass' ? '#3f8a3a' : c.verdict === 'zone' ? '#d98a2b' : '#8a8064';
+    const color = c.verdict === 'lead' ? C.red : c.verdict === 'pass' ? '#3f8a3a' : c.verdict === 'zone' ? '#d98a2b' : c.verdict === 'talk' ? '#3a5a9a' : '#8a8064';
     p.rect(X + 4, y + 1, 3, 15, color);
     const g = p.g; g.save(); g.translate(X + 10, y + 1); g.scale(0.6, 0.6); drawToolIcon(p, ICON_TOOL[c.icon], 0, 0); g.restore();
     p.text(c.title, X + 28, y + 1, 9, C.ink, 'left', 700);
@@ -718,7 +719,7 @@ export function drawAccuse(p: Painter, t: number) {
   p.rect(STAGE.x, STAGE.y, STAGE.w, STAGE.h, 'rgba(8,12,10,0.6)');
   p.clearText(STAGE.x, STAGE.y, STAGE.w, STAGE.h);
   region({ id: 'acc-bg', x: 0, y: 0, w: 640, h: 360, click: () => { if (ov.t0 && t - ov.t0 > 1.3) ui.overlay = null; } });
-  const X = 54, Y = 70, Wd = 304, Hd = 176;
+  const X = 54, Y = 58, Wd = 304, Hd = 200;
   p.panel(X, Y, Wd, Hd, C.paper);
   if (!ov.t0) {
     p.text('범인 지목', X + 10, Y + 6, 9, '#8a6a1f', 'left', 700);
@@ -732,7 +733,21 @@ export function drawAccuse(p: Painter, t: number) {
       const price = a === 'replace' ? comp.part ?? 0 : 0;
       button(p, 'acc:' + a, X + 92 + i * (bw + 4), Y + 58, bw, 46, ACTION_NAME[a], () => startAccuse(a), { kind: 'primary', size: 12, sub: `${repairMinutes(def, a)}분${price ? ' ' + won(price) : ''}` });
     });
-    p.wrap('틀리면 시간과 부품값을 쓰고 수리비가 10% 깎인다. 교체는 그 부품의 고장을 다 없애지만 돈이 든다.', X + 10, Y + 116, Wd - 20, 9, '#5b5644', 12);
+    // 근거 고르기: 맞으면 명추리 보너스
+    const cands = cluesOf(def, job).filter(c => c.verdict !== 'info').slice(-6).reverse().slice(0, 4);
+    p.text('근거 카드 (고르고 맞히면 명추리 +10%)', X + 10, Y + 112, 9, '#5b5644', 'left', 700);
+    if (!cands.length) p.text('모은 단서가 없다. 찍어서 맞혀도 보너스는 없다', X + 10, Y + 128, 9, '#8a8064', 'left', 500);
+    cands.forEach((c, i) => {
+      const cw = (Wd - 24) / 2, cx = X + 10 + (i % 2) * (cw + 4), cy = Y + 124 + Math.floor(i / 2) * 20;
+      const on = ov.ev === c.key;
+      const col = c.verdict === 'lead' ? C.red : c.verdict === 'pass' ? '#3f8a3a' : c.verdict === 'zone' ? '#d98a2b' : '#3a5a9a';
+      p.round(cx, cy, cw, 17, on ? col : '#8a7a5a', 2);
+      p.rect(cx + 1, cy + 1, cw - 2, 15, on ? lighten(col, 0.75) : (ui.hover === 'ev:' + c.key ? '#fff6d8' : '#efe6c8'));
+      p.rect(cx + 1, cy + 1, 3, 15, col);
+      const title = p.measure(c.title, 9, 700) > cw - 22 ? c.title.slice(0, 13) + '…' : c.title;
+      p.text((on ? '✔ ' : '') + title, cx + 8, cy + 3, 9, C.ink, 'left', 700);
+      region({ id: 'ev:' + c.key, x: cx, y: cy, w: cw, h: 17, click: () => { ov.ev = on ? undefined : c.key; sfx('paper'); } });
+    });
     button(p, 'acc-x', X + Wd - 70, Y + Hd - 28, 60, 22, '취소', () => { ui.overlay = null; }, { kind: 'quiet', size: 10 });
     return;
   }
@@ -748,6 +763,9 @@ export function drawAccuse(p: Painter, t: number) {
       for (let i = 0; i < 10; i++) { const a = i * 0.63 + age; const r = 30 + (age - 0.6) * 60; p.rect(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6, 3, 3, i % 2 ? C.glow : C.ok); }
       p.text('딸깍! 자물쇠가 풀렸다', cx, cy + 34, 15, '#1f5a1f', 'center', 700);
       p.text(job.faults.length ? `남은 자물쇠 ${job.faults.length}개` : '모든 자물쇠를 풀었다! 켜서 확인하고 돌려주자', cx, cy + 56, 10, C.ink, 'center', 700);
+      if (ov.verdict === 'sharp') { const s2 = Math.max(1, 2 - (age - 0.6) * 4); p.text('명추리! 수리비 +10%', cx, cy - 64, 14 * s2, '#b8862e', 'center', 400, 'sign'); }
+      else if (ov.verdict === 'lucky') p.text('맞혔지만 고른 근거는 빗나갔다', cx, cy - 58, 10, '#8a6a1f', 'center', 700);
+      else p.text('근거 없이 찍어서 맞혔다', cx, cy - 58, 10, '#8a8064', 'center', 700);
     } else {
       p.line(cx - 20, cy - 26, cx + 20, cy + 14, C.red, 4); p.line(cx + 20, cy - 26, cx - 20, cy + 14, C.red, 4);
       p.text('철컥… 이게 아니다', cx, cy + 34, 15, '#7a1a0a', 'center', 700);
@@ -783,8 +801,14 @@ function commitAccuse(a: Action) {
   const state = holder.state;
   const blocked = repairCheck(state, ov.comp, a);
   if (blocked) { toast(blocked.text, true); ui.overlay = null; return; }
+  const job = activeJob(state)!;
+  const def = item(job.itemId);
+  const before = job.faults.filter(id => faultOf(def, id).comp === ov.comp);
+  const ev = ov.ev ? cluesOf(def, job).find(c => c.key === ov.ev) : undefined;
   const r = repair(state, ov.comp, a);
   ov.action = a; ov.fixed = r.fixed ?? 0; ov.text = r.text; ov.t0 = ui.now;
+  ov.verdict = !ov.fixed || !ev ? undefined : supports(def, job, ev, ov.comp, before) ? 'sharp' : 'lucky';
+  if (ov.verdict === 'sharp') job.insight = (job.insight ?? 0) + 1;
   ui.popups = [];
   sfx('click');
   setTimeout(() => sfx(ov.fixed ? 'lockOpen' : 'lockFail'), 600);

@@ -509,7 +509,58 @@ export function casebookEntries() {
 
 /** 틀린 정답 시도마다 10%씩 깎인 수리비 (최소 절반) */
 export function payFor(job: Job) {
-  return Math.round(job.fee * Math.max(0.5, 1 - 0.1 * (job.wrong ?? 0)) / 100) * 100;
+  const bonus = 0.1 * Math.min(3, job.insight ?? 0);
+  return Math.round(job.fee * (Math.max(0.5, 1 - 0.1 * (job.wrong ?? 0)) + bonus) / 100) * 100;
+}
+
+/* ---------- 손님에게 묻기 ---------- */
+export type Question = 'onset' | 'when' | 'event';
+/** 고장의 성격: 손님 대답이 가리키는 것 */
+export function natureOf(f: Fault): Record<Question, string> {
+  const m = f.mark;
+  const flaky = f.fix === 'solder' || !!f.ohm?.flicker || f.id.startsWith('cord_loose');
+  const bump = f.fix === 'adjust' || m === 'bent' || m === 'kink' || m === 'pin' || m === 'offtrack';
+  const sudden = !flaky && !bump && (m === 'filament' || m === 'snapped' || m === 'burnt' || m === 'torn' || (f.fix === 'replace' && f.ohm?.v === Infinity && !f.ohm.cap));
+  const onset = flaky ? 'flaky' : bump ? 'bump' : sudden ? 'sudden' : 'gradual';
+  const when = flaky ? 'touch' : f.latent ? 'warm' : 'always';
+  const event = m === 'rust' ? 'damp' : m === 'dirty' || m === 'powder' || m === 'gummy' || m === 'dryoil' || f.fix === 'oil' ? 'dust'
+    : m === 'soot' || m === 'burnt' ? 'smell' : bump ? 'drop' : m === 'torn' ? 'loud' : m === 'slack' || m === 'glazed' || m === 'frayed' ? 'old' : 'none';
+  return { onset, when, event };
+}
+
+export const ANSWERS: Record<string, { say: string; short: string; means: string }> = {
+  sudden: { say: '어느 날 퍽! 하더니 갑자기 그랬어요.', short: '갑자기 퍽!', means: '끊어지거나 타 버린 부품?' },
+  gradual: { say: '몇 달에 걸쳐 조금씩 나빠졌어요.', short: '서서히 나빠짐', means: '닳거나, 마르거나, 더러워진 곳?' },
+  flaky: { say: '됐다 안 됐다 해요. 들쭉날쭉해요.', short: '됐다 안 됐다', means: '접촉 불량이나 냉납?' },
+  bump: { say: '옮기다 한 번 쿵 한 뒤부터 그래요.', short: '쿵 한 뒤부터', means: '휘거나 어긋난 곳 → 조정?' },
+  warm: { say: '켜자마자는 괜찮은데 한참 쓰면 그래요.', short: '한참 써야 증상', means: '지켜봐야 드러나는 고장' },
+  touch: { say: '툭 치거나 움직이면 달라져요.', short: '건드리면 달라짐', means: '흔들어 보면 범인이 드러난다' },
+  always: { say: '켜기만 하면 늘 똑같이 그래요.', short: '늘 똑같음', means: '재 보면 끊긴 곳이 나온다' },
+  damp: { say: '습한 창고에 오래 뒀었어요.', short: '습한 창고', means: '녹·산화 → 닦으면 될지도' },
+  dust: { say: '몇 년 안 쓰고 묵혀 뒀어요.', short: '오래 묵힘', means: '먼지·굳은 기름 → 세척이나 기름?' },
+  smell: { say: '탄내가 난 적이 있어요.', short: '탄내', means: '타거나 그을린 곳을 찾자' },
+  drop: { say: '애들이 한 번 떨어뜨렸어요.', short: '떨어뜨림', means: '휘거나 빠진 곳?' },
+  loud: { say: '소리를 크게 틀어 놓곤 했어요.', short: '크게 틀었음', means: '무리해서 찢어지거나 탄 곳?' },
+  old: { say: '할아버지 때부터 쓰던 거예요.', short: '아주 오래 씀', means: '고무·끈처럼 늙는 부품?' },
+  none: { say: '글쎄요, 특별한 일은 없었는데요.', short: '특별한 일 없음', means: '이 질문으론 단서가 없다' },
+};
+export const QUESTIONS: { id: Question; ask: string }[] = [
+  { id: 'onset', ask: '언제부터 그랬어요?' },
+  { id: 'when', ask: '어떨 때 그래요?' },
+  { id: 'event', ask: '무슨 일 있었어요?' },
+];
+
+/** 손님에게 묻는다. 카운터에선 공짜, 작업대에선 전화라 3분 */
+export function askCustomer(state: GameState, jobId: string, q: Question, byPhone: boolean): Result {
+  const job = state.jobs.find(j => j.id === jobId) ?? state.pending.find(j => j.id === jobId);
+  if (!job) return fail('');
+  job.asked ??= {};
+  if (job.asked[q]) return { ok: true, text: ANSWERS[job.asked[q]].say };
+  if (byPhone) { const blocked = canSpend(state, 3); if (blocked) return blocked; state.minute += 3; }
+  const id = job.faults[0];
+  const ans = id ? natureOf(faultOf(item(job.itemId), id))[q] : 'none';
+  job.asked[q] = ans;
+  return { ok: true, text: ANSWERS[ans].say };
 }
 
 const ACTION_HINT: Record<Action, string> = { replace: '새 것으로 바꿔야 한다', clean: '닦으면 산다', solder: '납땜을 다시 하면 된다', oil: '기름이 필요하다', adjust: '맞춰 주면 된다' };

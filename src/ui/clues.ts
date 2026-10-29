@@ -1,9 +1,10 @@
 import type { Comp, ItemDef, Job } from '../types';
+import { ANSWERS, QUESTIONS, faultOf, natureOf, type Question } from '../game';
 import { josa } from '../items/util';
 import { BAD_FEEL, BAD_SOUND, FEEL_WORD, HEAT_WORD, MARK_WORD, SOUND_WORD, ohmBad, ohmText, tpState } from './words';
 
-export type Verdict = 'lead' | 'zone' | 'pass' | 'info';
-export type ClueIcon = 'look' | 'tester' | 'ear' | 'hand' | 'shake' | 'amp';
+export type Verdict = 'lead' | 'zone' | 'pass' | 'info' | 'talk';
+export type ClueIcon = 'look' | 'tester' | 'ear' | 'hand' | 'shake' | 'amp' | 'talk';
 
 export interface Clue {
   key: string;
@@ -63,7 +64,35 @@ export function cluesOf(def: ItemDef, job: Job): Clue[] {
     }
     if (f.shake !== undefined) out.push({ key: id + ':shake', target: id, isTp: false, icon: 'shake', t, title: f.shake ? `${josa(name, '을', '를')} 흔들자 증상이 변했다!` : `${name}: 흔들어도 그대로`, means: f.shake ? '접촉 불량이 여기 있다' : '흔들림과는 상관없다', verdict: f.shake ? 'lead' : 'info' });
   }
+  // 손님 대답
+  QUESTIONS.forEach((q, i) => {
+    const a = job.asked?.[q.id];
+    if (!a) return;
+    out.push({ key: 'ask:' + q.id, target: '', isTp: false, icon: 'talk', t: -3 + i, title: `손님: ${ANSWERS[a].short}`, means: ANSWERS[a].means, verdict: a === 'none' ? 'info' : 'talk' });
+  });
   return out.sort((a, b) => a.t - b.t);
+}
+
+/** 이 단서가 이 부품을 범인으로 지목할 근거가 되는가 (faults: 그 부품에서 고친 고장) */
+export function supports(def: ItemDef, job: Job, clue: Clue, compId: string, faults: string[]) {
+  if (clue.icon === 'talk') {
+    const q = clue.key.slice(4) as Question;
+    const a = job.asked?.[q];
+    return !!a && a !== 'none' && faults.some(id => natureOf(faultOf(def, id))[q] === a);
+  }
+  if (!clue.isTp) return clue.target === compId && (clue.verdict === 'lead' || clue.verdict === 'zone');
+  if (clue.icon === 'ear' || clue.icon === 'amp') return clue.verdict === 'zone' && ['escape', 'train', 'idler', 'motor', 'pitch'].includes(compId);
+  // 측정점: 0이면 끊긴 곳 앞(위쪽), 낮거나 떨리면 같은 줄 어디든(뒤에서 끌어내릴 수도), 정상이면 그 뒤(아래쪽)
+  const tp = def.tps.find(x => x.id === clue.target);
+  const st = tp ? tpState(tp, job.found[clue.target]?.tp) : 0;
+  for (const row of def.flow) {
+    const ti = row.indexOf(clue.target), ci = row.indexOf(compId);
+    if (ti < 0 || ci < 0) continue;
+    if (st === 3 && ci < ti) return true;
+    if (st === 2) return true;
+    if (st === 1 && ci > ti) return true;
+  }
+  return false;
 }
 
 export type Status = 'lead' | 'zone' | 'pass' | 'none';

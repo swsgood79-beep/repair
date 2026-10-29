@@ -7,7 +7,7 @@
  */
 import { ITEMS } from '../src/items';
 import type { Ctx, ItemDef } from '../src/types';
-import { activeJob, faultOf, handBack, newGame, repair, setCtx, setOpen, simulate, startDay, endDay, useTool, watch, nudge } from '../src/game';
+import { ANSWERS, natureOf, activeJob, faultOf, handBack, newGame, repair, setCtx, setOpen, simulate, startDay, endDay, useTool, watch, nudge } from '../src/game';
 
 let failures = 0;
 const fail = (msg: string) => { failures++; console.error('FAIL', msg); };
@@ -141,6 +141,14 @@ console.log(`OK 무작위 의뢰 ${solvedJobs}건을 정답 수리로 해결`);
   if (state.trust !== trust - 2) fail('재방문 신뢰 하락 없음');
   console.log('OK 잠복 고장: 대금은 받지만 다음 날 재방문과 신뢰 하락');
 }
+
+// 손님 대답: 모든 고장이 대답 표에 있는 성격으로 분류되고, 물건마다 대답이 한 가지로 몰리지 않는다
+for (const def of ITEMS) {
+  const kinds = new Set<string>();
+  for (const f of def.faults) for (const [q, a] of Object.entries(natureOf(f))) { if (!ANSWERS[a]) fail(`${def.id}/${f.id}: 대답 ${q}=${a} 없음`); kinds.add(a); }
+  if (kinds.size < 4) fail(`${def.id}: 손님 대답이 너무 단조로움`);
+}
+console.log('OK 손님 대답: 모든 고장에 성격이 붙는다');
 
 if (failures) throw new Error(`${failures}건 실패`);
 console.log('모든 검증 통과');

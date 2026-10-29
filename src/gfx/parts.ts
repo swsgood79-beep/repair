@@ -591,6 +591,7 @@ function rawToolIcon(p: Painter, id: string, x: number, y: number) {
     case 'touch': r(9, 3, 4, 12, '#e6b98f'); r(7, 12, 10, 9, '#e6b98f'); r(13, 9, 2, 6, '#e6b98f'); r(15, 10, 2, 5, '#e6b98f'); r(17, 4, 2, 5, C.red); r(19, 2, 2, 3, C.warn); break;
     case 'wiggle': r(8, 6, 8, 12, '#e6b98f'); r(3, 9, 2, 6, C.cream); r(19, 9, 2, 6, C.cream); r(1, 11, 2, 2, C.cream); r(21, 11, 2, 2, C.cream); break;
     case 'inject': r(3, 9, 12, 6, '#2c7a73'); r(15, 11, 7, 2, C.steel); r(5, 11, 3, 2, C.glow); r(1, 4, 2, 2, C.glow); r(4, 2, 2, 2, C.glow); break;
+    case 'talk': r(2, 4, 20, 13, C.cream); r(3, 3, 18, 1, C.cream); r(6, 17, 4, 3, C.cream); r(6, 20, 2, 2, C.cream); r(6, 9, 3, 3, '#3a5a9a'); r(11, 9, 3, 3, '#3a5a9a'); r(16, 9, 3, 3, '#3a5a9a'); break;
     case 'mark': for (let i = 0; i < 12; i++) r(5 + i, 18 - i, 3, 3, C.gold); r(4, 19, 3, 3, '#e6b98f'); r(17, 4, 4, 4, C.red); break;
     case 'repair': for (let i = 0; i < 10; i++) r(4 + i, 4 + i, 3, 3, C.steel); r(13, 13, 7, 7, C.red); r(3, 3, 5, 2, C.steel); r(3, 3, 2, 5, C.steel); for (let i = 0; i < 9; i++) r(17 - i, 4 + i, 2, 2, C.brass); break;
     case 'clock': p.disc(x + 12, y + 12, 9, C.cream); p.ring(x + 12, y + 12, 9, C.ink); r(12, 6, 1, 7, C.ink); r(12, 12, 5, 1, C.ink); break;

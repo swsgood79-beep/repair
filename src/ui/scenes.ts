@@ -3,7 +3,7 @@ import { C, Painter } from '../gfx/painter';
 import { drawCustomer, drawItemIcon, drawToolIcon } from '../gfx/parts';
 import {
   DAILY_COST, DEADLINE, SHOP_LEVELS, START_DEBT, TOOL_SHOP, expand, levelOf, activeJob, buyTool, casebookEntries, clearSave, clockText, continueEndless,
-  customerOf, endDay, handBack, newGame, payDebt, save, startDay, timeLeft, won,
+  customerOf, endDay, handBack, newGame, payDebt, save, startDay, timeLeft, won, ANSWERS, QUESTIONS, askCustomer,
 } from '../game';
 import { setAudioPrefs, sfx } from '../audio';
 import { button, dim, holder, region, toast, ui, type Overlay } from './core';
@@ -67,6 +67,8 @@ function startNew() {
 
 /* ---------- 카운터: 손님 맞이와 돌려주기 ---------- */
 let lastBell = '';
+/** 카운터에서 방금 들은 대답 */
+const askSaid = { job: '', text: '' };
 export function drawCounter(p: Painter, t: number) {
   const cnt = ui.counter;
   shopRoom(p, t);
@@ -85,7 +87,17 @@ export function drawCounter(p: Painter, t: number) {
     for (let i = 0; i < 7; i++) p.rect(300 - i * 2, 192 + i, i * 2 + 2, 1, i === 6 ? C.ink : C.paper), p.rect(298 - i * 2, 192 + i, 1, 1, C.ink);
     p.text(cu.name, 312, 174, 11, '#5b5644', 'left', 700);
     p.text(`${cnt.i + 1} / ${cnt.ids.length}`, 610, 174, 9, '#5b5644', 'right');
-    p.wrap(`“${job.complaint}”`, 312, 190, 296, 13, '#24406b', 19, 700);
+    const said = askSaid.job === job.id ? askSaid.text : job.complaint;
+    p.wrap(`“${said}”`, 312, 190, 296, 13, '#24406b', 19, 700);
+    // 물어보기: 대답은 단서 수첩에 남는다
+    p.text('물어보기', 300, 254, 9, C.cream, 'left', 700);
+    QUESTIONS.forEach((q, i) => {
+      const done = !!job.asked?.[q.id];
+      button(p, 'ask:' + q.id, 346 + i * 92, 249, 88, 20, q.ask, () => {
+        const r = askCustomer(state, job.id, q.id, false);
+        askSaid.job = job.id; askSaid.text = r.text; sfx('paper'); save(state);
+      }, { kind: done ? 'on' : undefined, size: 9 });
+    });
     p.text(`${state.day}일차 아침`, 20, 270, 16, C.cream, 'left', 400, 'sign');
     p.text(item(job.itemId).name, 20, 294, 12, C.gold, 'left', 700);
     p.text(job.comeback ? '무상 재수리 · 신뢰 −2' : `수리비 ${won(job.fee)}`, 20, 312, 11, job.comeback ? '#ffb4a0' : C.cream, 'left', 700);
@@ -185,6 +197,31 @@ export function drawOverlay(p: Painter, t: number) {
   const s = holder.state;
   dim(p);
   const close = () => { ui.overlay = null; };
+  if (ov.kind === 'ask') {
+    const job = activeJob(s);
+    if (!job) { ui.overlay = null; return; }
+    const cu = customerOf(job);
+    p.panel(120, 60, 400, 230, C.paper);
+    p.text('☎ 손님에게 전화로 묻기', 136, 70, 14, C.ink, 'left', 400, 'sign');
+    p.text('한 번에 3분. 대답은 부품을 콕 집지 않는다. 측정과 엮어서 생각하자', 136, 92, 9, '#5b5644', 'left', 500);
+    p.box(136, 110, 60, 66, '#c9bf98');
+    p.g.save(); p.g.beginPath(); p.g.rect(137, 111, 58, 64); p.g.clip(); drawCustomer(p, { ...cu }, 136, 110, 'calm', t, 1.4); p.g.restore();
+    p.text(cu.name, 166, 180, 9, '#5b5644', 'center', 700);
+    QUESTIONS.forEach((q, i) => {
+      const a = job.asked?.[q.id];
+      const y = 110 + i * 46;
+      button(p, 'ph:' + q.id, 208, y, 120, 26, q.ask, () => {
+        const r = askCustomer(s, job.id, q.id, true);
+        if (!r.ok) toast(r.text, true); else { sfx('paper'); save(s); }
+      }, { kind: a ? 'on' : undefined, size: 10, sub: a ? '물어봄' : '3분' });
+      if (a) {
+        p.wrap(`“${ANSWERS[a].say}”`, 336, y, 170, 10, '#24406b', 13, 700);
+        p.text(`→ ${ANSWERS[a].means}`, 336, y + 28, 8, '#8a6a1f', 'left', 700);
+      }
+    });
+    button(p, 'ask-x', 420, 256, 84, 24, '닫기', close, { size: 11 });
+    return;
+  }
   if (ov.kind === 'shelf') {
     p.panel(60, 40, 520, 280, '#3a2a1c', '#1c140e');
     p.text('선반 · 맡은 물건', 76, 48, 14, C.gold, 'left', 400, 'sign');

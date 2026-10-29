@@ -197,6 +197,10 @@ export interface Job {
   wrong?: number;
   /** 받은 힌트 단계 */
   hints?: number;
+  /** 손님에게 물어본 질문과 대답 (질문 → 대답 종류) */
+  asked?: Record<string, string>;
+  /** 근거를 대고 맞힌 횟수 (명추리) */
+  insight?: number;
 }
 
 export interface Customer { name: string; hair: string; skin: string; shirt: string; style: number; acc?: string; hello: string; thanks: string; angry: string }
