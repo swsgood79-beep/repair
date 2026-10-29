@@ -1,9 +1,10 @@
 import { ITEMS } from '../src/items';
-import { activeJob, faultOf, handBack, newGame, repair, setOpen, startDay, endDay, buyTool, payDebt } from '../src/game';
+import { activeJob, faultOf, handBack, newGame, repair, setOpen, startDay, endDay, buyTool, payDebt, expand, SHOP_LEVELS } from '../src/game';
 
 // 정답을 아는 정책 + 진단에 의뢰당 시간 T분을 쓰고, 확률 w로 엉뚱한 부품 하나를 교체하는 "사람 같은" 정책
-for (const [T, w] of [[20, 0], [35, 0.3], [50, 0.6]] as const) {
+for (const [T, w] of [[20, 0], [35, 0.3], [50, 0.6], [80, 0.6]] as const) {
   const totals: number[] = [];
+  const wins: number[] = [];
   for (let seed = 1; seed <= 60; seed++) {
     const state = newGame(seed);
     let rng = seed * 99991;
@@ -25,11 +26,15 @@ for (const [T, w] of [[20, 0], [35, 0.3], [50, 0.6]] as const) {
         handBack(state);
       }
       endDay(state);
+      // 가게 확장을 먼저, 남는 돈으로 빚을 갚는다
+      const next = SHOP_LEVELS[state.level ?? 1];
+      if (next && state.money - next.price > 40000) expand(state);
       payDebt(state, Math.max(0, state.money - 40000));
+      if (state.ending === 'kept') wins.push(day);
       if (!state.ending) startDay(state);
     }
     totals.push(800000 - state.debt + state.money);
   }
   totals.sort((a, b) => a - b);
-  console.log(`진단 ${T}분, 헛교체 ${w}: 14일 순수익 중앙값 ${totals[30]} (하위 10% ${totals[6]}, 상위 10% ${totals[54]})`);
+  console.log(`진단 ${T}분, 헛교체 ${w}: 14일 순수익 중앙값 ${totals[30]} (하위 10% ${totals[6]}, 상위 10% ${totals[54]}) · 본점+빚 완료 ${wins.length}/60판${wins.length ? `, 평균 ${(wins.reduce((a, b) => a + b, 0) / wins.length).toFixed(1)}일째` : ''}`);
 }

@@ -28,6 +28,7 @@ export function cluesOf(def: ItemDef, job: Job): Clue[] {
     if (tp && f.tp) {
       const st = tpState(tp, f.tp);
       if (tp.kind === 'beat') out.push({ key: id + ':tp', target: id, isTp: true, icon: 'ear', t, title: st === 3 ? '박자 없음' : st === 2 ? '똑…딱 박자가 절뚝' : '똑딱 박자 고름', means: st === 2 ? '탈진기 쪽이 어긋났다' : st === 3 ? '시계가 멈춰 있다' : '박자는 정상', verdict: st === 1 ? 'info' : 'zone' });
+      else if (tp.kind === 'amp' && tp.unit !== '°') out.push({ key: id + ':tp', target: id, isTp: true, icon: 'amp', t, title: f.tp.v === 0 ? `${tp.label} 0 · 멈춤` : `${tp.label} ${f.tp.v}${tp.unit}`, means: f.tp.v === 0 ? '돌지 않는다' : st === 2 ? '느리다 → 힘을 전하는 쪽 어딘가' : '속도 정상', verdict: st === 2 ? 'zone' : 'info' });
       else if (tp.kind === 'amp') out.push({ key: id + ':tp', target: id, isTp: true, icon: 'amp', t, title: `진폭 ${f.tp.v}°`, means: f.tp.v === 0 ? '진자가 멈춰 있다' : f.tp.v < 7 ? '흔들림이 좁다 → 어딘가 뻑뻑' : '흔들림 정상', verdict: f.tp.v && f.tp.v < 7 ? 'zone' : 'info' });
       else {
         const val = `${tp.label} ${f.tp.v}${tp.unit}`;

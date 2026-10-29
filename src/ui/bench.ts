@@ -255,6 +255,32 @@ function decor(p: Painter, def: ItemDef) {
       B(150, 120, 340, 220, '#1c1c1c', '#000'); R(156, 126, 328, 4, '#3a3a3a');
       B(170, 60, 300, 60, '#1c1c1c', '#000');
       break;
+    case 'ricecooker':
+      B(180, 40, 280, 250, '#e8e2d0', '#5a5448'); R(186, 46, 268, 4, '#f6f2e6'); B(200, 30, 240, 30, '#d0c9b6', '#5a5448');
+      B(236, 196, 168, 50, '#c9c1aa', '#5a5448');
+      break;
+    case 'amp':
+      B(130, 40, 380, 270, '#c9c4b4', '#4f4a42'); R(136, 46, 368, 4, '#e2ddce'); B(140, 220, 360, 80, '#b5af9e', '#4f4a42');
+      B(8, 50, 108, 120, '#5a3920', '#2b1a0e'); B(524, 50, 108, 120, '#5a3920', '#2b1a0e');
+      break;
+    case 'turntable':
+      B(100, 30, 420, 320, '#6b4529', '#2b1a0e'); R(106, 36, 408, 4, '#8a5a36'); B(456, 290, 120, 50, '#5a3920', '#2b1a0e');
+      B(512, 60, 116, 120, '#5a3920', '#2b1a0e');
+      break;
+    case 'sewing':
+      B(20, 290, 600, 30, '#6b4529', '#2b1a0e');
+      B(170, 160, 320, 130, '#2a2a2a', '#000'); B(170, 60, 70, 110, '#2a2a2a', '#000'); B(170, 40, 300, 60, '#2a2a2a', '#000'); B(430, 60, 60, 120, '#2a2a2a', '#000');
+      R(180, 50, 280, 3, '#c9a65a'); R(180, 170, 300, 3, '#c9a65a');
+      break;
+    case 'tv':
+      B(80, 20, 520, 320, '#6b4529', '#2b1a0e'); R(86, 26, 508, 4, '#8a5a36'); B(500, 40, 90, 290, '#5a3920', '#2b1a0e');
+      for (let i = 0; i < 6; i++) R(510, 130 + i * 6, 70, 2, '#3f2714');
+      R(150, 338, 12, 30, '#2a2a2a'); R(480, 338, 12, 30, '#2a2a2a');
+      break;
+    case 'calc':
+      B(180, 30, 280, 320, '#3a3a36', '#000'); R(186, 36, 268, 4, '#55554f');
+      B(40, 120, 140, 84, '#2a2a28', '#000');
+      break;
     case 'clock':
       B(212, 30, 216, 338, '#6b4529', '#2b1a0e'); B(226, 40, 188, 318, '#5a3920', '#3f2714'); B(262, 214, 116, 140, 'rgba(200,230,230,0.08)', C.brass);
       break;
@@ -288,7 +314,7 @@ function drawCover(p: Painter, def: ItemDef, job: Job, t: number) {
   }
 }
 
-const SCREWS: Record<string, number> = { lamp: 3, fan: 4, radio: 6, cassette: 5, clock: 2, iron: 3, phone: 4 };
+const SCREWS: Record<string, number> = { lamp: 3, fan: 4, radio: 6, cassette: 5, clock: 2, iron: 3, phone: 4, ricecooker: 4, amp: 6, turntable: 4, sewing: 2, tv: 6, calc: 4 };
 function openCover(level: number) {
   const state = holder.state;
   const job = activeJob(state);
@@ -672,7 +698,7 @@ function startAccuse(a: Action) {
   if (ov?.kind !== 'accuse') return;
   const state = holder.state;
   const job = activeJob(state)!;
-  if (job.ctx.power && job.itemId !== 'clock') { ui.overlay = null; toast('감전 위험! 먼저 플러그를 뽑으세요', true); sfx('zap', 0.5); return; }
+  if (job.ctx.power && job.itemId !== 'clock') { ui.overlay = null; toast(job.itemId === 'calc' ? '전원부터! 먼저 전지를 빼세요' : '감전 위험! 먼저 플러그를 뽑으세요', true); sfx('zap', 0.5); return; }
   const blocked = repairCheck(state, ov.comp, a);
   if (blocked) { toast(blocked.text, true); ui.overlay = null; return; }
   const comp = compOf(item(job.itemId), ov.comp)!;

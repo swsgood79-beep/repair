@@ -7,14 +7,15 @@ export type Shape =
   | 'plug' | 'cord' | 'switch' | 'keys' | 'fuse' | 'xfmr' | 'cap' | 'tube' | 'pot' | 'speaker'
   | 'bulb' | 'socket' | 'joint' | 'motor' | 'belt' | 'bearing' | 'blade' | 'gear'
   | 'spring' | 'pendulum' | 'escape' | 'head' | 'battery' | 'roller' | 'board' | 'dial' | 'hands' | 'barrel'
-  | 'sole' | 'element' | 'thermo' | 'neon' | 'handset' | 'bell' | 'rotary' | 'mic';
+  | 'sole' | 'element' | 'thermo' | 'neon' | 'handset' | 'bell' | 'rotary' | 'mic'
+  | 'pan' | 'relay' | 'tr' | 'vu' | 'platter' | 'tonearm' | 'cart' | 'trim' | 'pedal' | 'needlebar' | 'bobbin' | 'crt' | 'lcd' | 'keypad' | 'chip' | 'ribbon';
 
 /** 눈·돋보기로 보았을 때 확대 그림에 그려지는 흠 */
 export type Mark =
   | 'filament' | 'rust' | 'soot' | 'bulge' | 'leak' | 'crack' | 'dryoil' | 'burnt' | 'slack' | 'snapped'
   | 'torn' | 'glazed' | 'powder' | 'kink' | 'bent' | 'pin' | 'dirty' | 'faded' | 'frayed' | 'offtrack' | 'gummy';
 
-export type Sound = 'hum' | 'loudhum' | 'squeal' | 'crackle' | 'buzz' | 'whirr' | 'spin' | 'music' | 'muffled' | 'static' | 'tick' | 'limp' | 'catch' | 'drag' | 'slip' | 'quiet' | 'dialtone' | 'ring' | 'click';
+export type Sound = 'hum' | 'loudhum' | 'squeal' | 'crackle' | 'buzz' | 'whirr' | 'spin' | 'music' | 'muffled' | 'static' | 'tick' | 'limp' | 'catch' | 'drag' | 'slip' | 'quiet' | 'dialtone' | 'ring' | 'click' | 'boil' | 'wow' | 'whine';
 
 export type Feel = 'smooth' | 'stiff' | 'sticky' | 'catch' | 'free' | 'loose' | 'soft' | 'hard' | 'firm' | 'slack' | 'mushy' | 'crisp' | 'tight';
 
@@ -49,7 +50,7 @@ export interface TestPoint {
   layer: Layer;
   /** volt·sig: 테스터, beat: 청진기, amp: 눈 */
   kind: 'volt' | 'sig' | 'beat' | 'amp';
-  unit: 'V' | 'mV' | 's' | '°';
+  unit: 'V' | 'mV' | 's' | '°' | 'rpm';
   /** 할아버지 수첩의 정상값 */
   expect: number;
 }
@@ -113,6 +114,14 @@ export interface FX {
   /** 전화 신호음 · 벨 */
   dial?: number;
   ring?: number;
+  /** 앰프 좌우 레벨 미터 */
+  vu?: [number, number];
+  /** TV 화면 */
+  screen?: 'off' | 'black' | 'line' | 'snow' | 'roll' | 'ok';
+  /** 계산기 표시창 */
+  lcd?: { text: string; miss?: boolean; dim?: boolean };
+  /** 턴테이블 음 울렁임 */
+  wow?: number;
 }
 
 export interface Sim {

@@ -176,7 +176,7 @@ function startAppliance() {
   tone2.connect(g('tone')); tone2.start();
   const notes = [69, 72, 74, 76, 74, 72, 69, 67, 69, 72, 76, 79, 76, 74, 72, 74];
   let i = 0;
-  window.setInterval(() => { tone2.frequency.setTargetAtTime(mtof(notes[i++ % notes.length]) * (current.wobble ? 0.97 + Math.sin(i) * 0.015 : 1), a.currentTime, 0.02); }, 300);
+  window.setInterval(() => { tone2.frequency.setTargetAtTime(mtof(notes[i++ % notes.length]) * (current.wow ? 0.9 + Math.sin(i * 0.7) * 0.04 : current.wobble ? 0.97 + Math.sin(i) * 0.015 : 1) * (current.spin && current.spin < 0.95 && current.tone ? 0.92 : 1), a.currentTime, 0.02); }, 300);
   // 전화기: 신호음과 벨
   const dial = a.createOscillator(); dial.frequency.value = 425; dial.connect(g('dial')); dial.start();
   const bell = a.createOscillator(); bell.type = 'square'; bell.frequency.value = 950;

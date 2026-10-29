@@ -1,4 +1,4 @@
-import { item } from '../items';
+import { ITEMS, item } from '../items';
 import { C, Painter } from '../gfx/painter';
 import { drawCustomer, drawItemIcon, drawToolIcon } from '../gfx/parts';
 import {
@@ -79,7 +79,7 @@ export function drawTitle(p: Painter, t: number) {
   const has = holder.state.history.length > 0 || holder.state.minute > 0 || holder.state.day > 1;
   p.panel(150, 312, 340, 40, C.paper);
   p.text(`할아버지의 골목 수리점. ${DEADLINE}일 안에 빚 ${won(START_DEBT)}을 갚고 본점까지 키우자.`, 320, 316, 10, C.ink, 'center', 700);
-  p.text('가게가 커질수록 라디오·시계·다리미·전화기까지 고칠 수 있다', 320, 332, 9, '#5b5644', 'center');
+  p.text('가게가 커질수록 밥솥·앰프·전축·재봉틀·TV·계산기까지 고칠 수 있다', 320, 332, 9, '#5b5644', 'center');
   if (has) {
     button(p, 'continue', 220, 260, 96, 28, '이어하기', () => { ui.scene = holder.state.ending ? 'ending' : 'bench'; }, { kind: 'primary', size: 12 });
     button(p, 'new', 324, 260, 96, 28, '새로 시작', () => startNew(), { size: 12 });
@@ -370,7 +370,14 @@ function drawBook(p: Painter, ov: { kind: 'book'; page: number; sel?: string }) 
   const found = all.filter(e => s.casebook.includes(e.key)).length;
   p.text('고장 도감', 50, 32, 20, C.ink, 'left', 400, 'sign');
   p.text(`${found} / ${all.length}`, 590, 38, 12, C.ink, 'right', 700);
-  const items = ['lamp', 'fan', 'radio', 'cassette', 'clock'];
+  const pages = Math.ceil(ITEMS.length / 5);
+  const page = Math.min(ov.page, pages - 1);
+  const items = ITEMS.slice(page * 5, page * 5 + 5).map(d => d.id);
+  if (pages > 1) {
+    button(p, 'bk-prev', 400, 30, 28, 20, '◀', () => { ov.page = (page + pages - 1) % pages; ov.sel = undefined; }, { size: 10 });
+    p.text(`${page + 1}/${pages}`, 446, 34, 10, C.ink, 'center', 700);
+    button(p, 'bk-next', 464, 30, 28, 20, '▶', () => { ov.page = (page + 1) % pages; ov.sel = undefined; }, { size: 10 });
+  }
   items.forEach((id, col) => {
     const x = 44 + col * 112;
     drawItemIcon(p, id, x, 60, 1);

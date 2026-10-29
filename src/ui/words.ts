@@ -9,8 +9,9 @@ export const SOUND_WORD: Record<Sound, string> = {
   hum: '웅웅', loudhum: '웅—!! 큼', squeal: '끼익!', crackle: '지지직', buzz: '지직 떨림', whirr: '윙—', spin: '윙 고르게', music: '♪ 음악',
   muffled: '♪ 먹먹', static: '치익—', tick: '똑딱', limp: '똑…딱 절뚝', catch: '틱! 걸림', drag: '끄는 소리', slip: '사각사각', quiet: '조용',
   dialtone: '뚜— 신호음', ring: '따르르릉', click: '딸깍딸깍',
+  boil: '보글보글', wow: '울렁울렁', whine: '삐— 가는 고음',
 };
-export const BAD_SOUND = new Set<Sound>(['loudhum', 'squeal', 'crackle', 'buzz', 'muffled', 'limp', 'catch', 'drag', 'slip']);
+export const BAD_SOUND = new Set<Sound>(['loudhum', 'squeal', 'crackle', 'buzz', 'muffled', 'limp', 'catch', 'drag', 'slip', 'wow']);
 export const FEEL_WORD: Record<Feel, string> = {
   smooth: '부드럽게 돈다', stiff: '뻑뻑!', sticky: '끈적!', catch: '턱 걸림!', free: '헛돈다!', loose: '헐겁다!', soft: '말랑',
   hard: '돌처럼 딱딱!', firm: '단단', slack: '축 처짐!', mushy: '물렁!', crisp: '딸깍', tight: '팽팽',

@@ -164,7 +164,7 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       break;
     }
     case 'gear': {
-      const run = (fx.swing ?? 0) > 0;
+      const run = (fx.swing ?? 0) > 0 || (fx.spin ?? 0) > 0;
       const gear = (gx: number, gy: number, r: number, dir: number, sp: number) => {
         const a0 = run ? t * sp * dir : 0;
         const k = Math.max(8, Math.round(r * 1.2));
@@ -235,7 +235,7 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       break;
     }
     case 'element': {
-      const g = fx.glow?.element ?? 0;
+      const g = glow;
       const col = g > 0.7 ? '#ff7a3a' : g > 0 ? '#c8643a' : '#8a6a5a';
       for (let i = 0; i < w; i += 2) p.rect(x + i, cy + Math.sin(i * 0.5) * (h * 0.35), 2, 2, col);
       p.rect(x, cy - 1, 4, 3, C.steel); p.rect(x + w - 4, cy - 1, 4, 3, C.steel);
@@ -249,7 +249,7 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       break;
     }
     case 'neon': {
-      const g = fx.glow?.neon ?? 0;
+      const g = glow;
       if (g > 0) p.disc(cx, cy, w * 0.7, 'rgba(255,120,60,0.25)');
       p.disc(cx, cy, Math.min(w, h) / 2 - 1, g > 0 ? '#ff8a4a' : '#5a3a2a'); p.ring(cx, cy, Math.min(w, h) / 2 - 1, '#2a1a10');
       break;
@@ -280,6 +280,159 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       p.rect(cx + r * 0.55, cy + r * 0.3, 3, r * 0.5, C.steel);
       break;
     }
+
+    case 'pan': {
+      const hot = glow > 0 || (fx.noise ?? 0) > 0;
+      p.box(x, y + h * 0.18, w, h * 0.82, '#d9dde0', '#5d686d');
+      p.rect(x + 4, y + h * 0.18 + 3, w - 8, 3, C.white);
+      p.box(x - 6, y + h * 0.1, w + 12, h * 0.14, '#b9c1c6', '#5d686d');
+      p.rect(x + 4, y + h * 0.26, w - 8, h * 0.2, '#f4f2ea');
+      for (let i = 0; i < 24; i++) p.rect(x + 8 + ((i * 29) % (w - 20)), y + h * 0.28 + ((i * 7) % (h * 0.15)), 3, 2, '#d8d2bf');
+      if (hot) for (let i = 0; i < 4; i++) { const yy = y - 6 - ((t * 20 + i * 9) % 30); p.rect(cx - 30 + i * 18 + Math.sin(t * 3 + i) * 3, yy, 3, 6, 'rgba(255,255,255,0.35)'); }
+      break;
+    }
+    case 'relay':
+      p.box(x, y, w, h, 'rgba(200,220,235,0.35)', '#9fb5ba');
+      p.box(x + 5, y + h * 0.45, w * 0.45, h * 0.45, '#b8662e', '#6e3510');
+      p.rect(x + w * 0.58, y + 6, 3, h - 12, C.steel);
+      p.rect(x + w * 0.58, y + 6, w * 0.3, 2, '#d0d4d8');
+      for (let i = 0; i < 4; i++) p.rect(x + 6 + i * (w - 14) / 3, y + h, 2, 4, C.steel);
+      break;
+    case 'tr':
+      p.box(x, y, w, h * 0.45, '#9aa2a8', '#3f4448');
+      p.disc(cx, y + h * 0.2, 3, '#3f4448');
+      p.box(x + 4, y + h * 0.42, w - 8, h * 0.36, '#1f1f1f', '#000');
+      for (let i = 0; i < 3; i++) p.rect(x + 8 + i * (w - 18) / 2, y + h * 0.78, 2, h * 0.22, C.steel);
+      break;
+    case 'vu': {
+      const v = fx.vu ?? [0, 0];
+      const lit = glow > 0;
+      for (const [k, side] of [[0, 'L'], [1, 'R']] as const) {
+        const bx = x + k * (w / 2) + 3, bw = w / 2 - 6;
+        p.box(bx, y, bw, h, lit ? '#f3e2a6' : '#b8ad88', C.ink);
+        for (let i = 0; i < 7; i++) { const a = -2.4 + (i / 6) * 1.5; p.rect(bx + bw / 2 + Math.cos(a) * bw * 0.4, y + h - 6 + Math.sin(a) * bw * 0.4, 2, 2, i > 4 ? C.red : '#4a3a1c'); }
+        const lvl = v[k] > 0 ? Math.min(1, v[k] * (0.75 + 0.25 * Math.sin(t * (9 + k * 2.3)) + 0.15 * Math.sin(t * 23 + k))) : 0;
+        const a = -2.4 + lvl * 1.5;
+        p.line(bx + bw / 2, y + h - 6, bx + bw / 2 + Math.cos(a) * bw * 0.42, y + h - 6 + Math.sin(a) * bw * 0.42, C.ink, 1);
+        p.label(side, bx + 8, y + 3, 8, '#4a3a1c');
+      }
+      break;
+    }
+    case 'platter': {
+      const r = Math.min(w, h) / 2 - 2;
+      p.disc(cx, cy, r, '#8d9297'); p.ring(cx, cy, r, '#3c4044', 2);
+      for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2; p.rect(cx + Math.cos(a) * (r - 3), cy + Math.sin(a) * (r - 3), 2, 2, i % 2 ? '#d0d4d8' : '#3c4044'); }
+      p.disc(cx, cy, r - 8, '#141414');
+      for (let i = 1; i < 7; i++) p.ring(cx, cy, (r - 8) * (0.4 + i * 0.09), '#262626');
+      const a = (fx.spin ?? 0) > 0 ? t * 3.5 * (fx.spin ?? 0) : 0;
+      p.line(cx + Math.cos(a) * r * 0.45, cy + Math.sin(a) * r * 0.45, cx + Math.cos(a) * (r - 10), cy + Math.sin(a) * (r - 10), 'rgba(255,255,255,0.18)', 2);
+      p.disc(cx, cy, r * 0.3, '#c0392b'); p.disc(cx, cy, r * 0.3 - 4, '#d9574a');
+      p.disc(cx, cy, 3, '#e0e0e0');
+      break;
+    }
+    case 'tonearm': {
+      const down = ctx.nudge && ctx.sw > 0 ? 1 : 0;
+      p.disc(x + w * 0.5, y + 18, 16, '#3c4044'); p.disc(x + w * 0.5, y + 18, 9, C.steel);
+      p.box(x + w * 0.5 - 6, y - 8, 12, 14, '#2a2a2a');
+      p.line(x + w * 0.5, y + 18, x + w * 0.2 - down * 6, y + h - 10, '#d0d4d8', 3);
+      p.rect(x + w - 16, y + h * 0.55, 12, 4, '#2a2a2a'); p.rect(x + w - 12, y + h * 0.55 - 10, 4, 14, C.steel);
+      break;
+    }
+    case 'cart':
+      p.box(x, y, w, h * 0.6, '#2a2a2a', '#000');
+      p.rect(x + 3, y + 2, w - 6, 2, '#5a5a5a');
+      p.rect(cx - 1, y + h * 0.6, 2, h * 0.35, '#e0e0e0');
+      p.rect(cx - 2, y + h - 3, 4, 3, '#f4e0a0');
+      break;
+    case 'trim': {
+      const r = Math.min(w, h) / 2 - 2;
+      p.box(x, y, w, h, '#2f5b3c', '#1b3523');
+      p.disc(cx, cy, r, '#e6e0cc'); p.ring(cx, cy, r, '#6d5214');
+      const a = 0.6 + (ctx.knobA ?? 0);
+      p.line(cx - Math.cos(a) * (r - 2), cy - Math.sin(a) * (r - 2), cx + Math.cos(a) * (r - 2), cy + Math.sin(a) * (r - 2), '#3a2a10', 2);
+      break;
+    }
+    case 'pedal': {
+      const down = ctx.sw === 1 ? 4 : 0;
+      p.box(x, y + h * 0.55, w, h * 0.45, '#3a3027', '#16110c');
+      p.box(x + 4, y + h * 0.2 + down, w - 8, h * 0.4, '#5a4a3a', '#16110c');
+      for (let i = 0; i < 5; i++) p.rect(x + 10 + i * (w - 24) / 4, y + h * 0.26 + down, 3, h * 0.28, '#3a3027');
+      break;
+    }
+    case 'needlebar': {
+      const sp = fx.spin ?? 0;
+      const dy = sp > 0 ? Math.round(Math.sin(t * 18 * Math.max(0.3, sp)) * 10) : 0;
+      p.box(x + w * 0.3, y, w * 0.4, h * 0.45 + dy, '#c9cfd3', '#5b6064');
+      p.rect(cx - 1, y + h * 0.45 + dy, 2, h * 0.3, '#e0e0e0');
+      p.box(x - 6, y + h * 0.82, w + 12, 6, '#9aa2a8', '#3f4448');
+      p.rect(x - 6, y + h * 0.9, w + 12, h * 0.1, '#e8e2cf');
+      for (let i = 0; i < 4; i++) p.rect(x - 2 + i * (w / 3), y + h * 0.93, w / 6, 2, (fx.tick ?? 0) > 0 ? '#c0392b' : '#bdb391');
+      break;
+    }
+    case 'bobbin': {
+      const r = Math.min(w, h) / 2 - 2;
+      const a = (fx.spin ?? 0) > 0 ? t * 20 * (fx.spin ?? 0) : 0;
+      p.disc(cx, cy, r, '#8d9297'); p.ring(cx, cy, r, '#3c4044', 2);
+      p.disc(cx, cy, r * 0.55, C.brass); p.disc(cx, cy, r * 0.25, '#e8e2cf');
+      p.line(cx, cy, cx + Math.cos(a) * r, cy + Math.sin(a) * r, '#d0d4d8', 3);
+      p.rect(cx + Math.cos(a) * r - 2, cy + Math.sin(a) * r - 2, 4, 4, '#f0f0f0');
+      break;
+    }
+    case 'crt': {
+      const scr = fx.screen ?? 'off';
+      p.box(x, y, w, h, '#3a3027', '#16110c');
+      const sx = x + 14, sy = y + 14, sw = w - 28, sh = h - 28;
+      p.box(sx, sy, sw, sh, '#1e2422', '#0b0e0d');
+      p.g.save(); p.g.beginPath(); p.g.rect(sx + 2, sy + 2, sw - 4, sh - 4); p.g.clip();
+      if (scr === 'ok' || scr === 'roll') {
+        const off = scr === 'roll' ? -((t * 60) % sh) : 0;
+        for (const o of [off, off + sh]) {
+          p.rect(sx, sy + o, sw, sh, '#9aa6a0');
+          p.rect(sx, sy + o + sh * 0.62, sw, sh * 0.38, '#5f6b66');
+          p.disc(sx + sw * 0.5, sy + o + sh * 0.42, sh * 0.2, '#e8eee9');
+          p.rect(sx + sw * 0.5 - sh * 0.14, sy + o + sh * 0.58, sh * 0.28, sh * 0.3, '#2a302d');
+          p.disc(sx + sw * 0.5 - 8, sy + o + sh * 0.38, 2, '#2a302d'); p.disc(sx + sw * 0.5 + 8, sy + o + sh * 0.38, 2, '#2a302d');
+          if (scr === 'roll') p.rect(sx, sy + o + sh - 8, sw, 8, '#0b0e0d');
+        }
+        for (let yy = 0; yy < sh; yy += 3) p.rect(sx, sy + yy, sw, 1, 'rgba(0,0,0,0.12)');
+      } else if (scr === 'snow') {
+        p.rect(sx, sy, sw, sh, '#6f7a75');
+        for (let i = 0; i < 420; i++) { const k = (i * 7919 + Math.floor(t * 30) * 104729) % 100000; p.rect(sx + (k % sw), sy + ((k / sw) | 0) % sh, 2, 1, i % 3 ? '#e8eee9' : '#1e2422'); }
+      } else if (scr === 'line') {
+        p.rect(sx, sy + sh / 2 - 1, sw, 3, '#f4fff8'); p.rect(sx, sy + sh / 2 - 4, sw, 9, 'rgba(220,255,240,0.25)');
+      }
+      p.g.restore();
+      p.rect(sx + 6, sy + 6, sw * 0.3, 3, 'rgba(255,255,255,0.12)');
+      break;
+    }
+    case 'lcd': {
+      const d = fx.lcd;
+      p.box(x, y, w, h, '#2a2a2a', '#000');
+      p.box(x + 8, y + 8, w - 16, h - 16, d?.text ? (d.dim ? '#7f8f72' : '#a9bc96') : '#7f8a78', '#1b1a18');
+      if (d?.text) { const sh = h - 28, cw = Math.round(sh * 0.55) + Math.max(1, Math.round(sh / 9)) + 2; p.seg(d.text.padStart(8, ' '), x + w - 14 - cw * 8, y + 14, sh, d.dim ? 'rgba(40,50,40,0.35)' : '#1c2418', 'rgba(0,0,0,0.04)', d.miss); }
+      break;
+    }
+    case 'keypad': {
+      p.box(x, y, w, h, '#3a3a36', '#16110c');
+      const labels = ['7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '−', '0', '.', '=', '+'];
+      const kw = (w - 10) / 4, kh = (h - 10) / 4;
+      labels.forEach((l, i) => {
+        const kx = x + 5 + (i % 4) * kw, ky = y + 5 + Math.floor(i / 4) * kh;
+        p.box(kx + 2, ky + 2, kw - 4, kh - 4, i % 4 === 3 || l === '=' ? '#c0742b' : '#e8e2d0', '#16110c');
+        p.label(l, kx + kw / 2, ky + kh / 2 - 6, 11, i % 4 === 3 || l === '=' ? C.white : '#2a2a2a');
+      });
+      break;
+    }
+    case 'chip':
+      p.box(x, y, w, h, '#1f1f1f', '#000');
+      p.disc(x + 8, y + 8, 3, '#3a3a3a');
+      for (let i = 0; i < 8; i++) { p.rect(x + 6 + i * (w - 12) / 7, y - 4, 3, 4, C.steel); p.rect(x + 6 + i * (w - 12) / 7, y + h, 3, 4, C.steel); }
+      p.label('LSI', cx, cy - 6, 9, '#8a8a8a');
+      break;
+    case 'ribbon':
+      p.box(x, y, w, h, '#c9a65a', '#6d5214');
+      for (let i = 0; i < 14; i++) p.rect(x + 4 + i * (w - 8) / 13, y + 2, 1, h - 4, '#8a6a1f');
+      break;
   }
   void id;
 }
@@ -292,7 +445,7 @@ export function drawCloseup(p: Painter, shape: Shape, mark: Mark | 'ok', cx: num
   p.disc(cx, cy, r, '#2c3a33');
   const s = r * 1.3;
   const dummyCtx = { power: false, sw: 0, knobA: 0.3, knobB: 0.5, wiggle: null, warm: false, nudge: false, moved: false };
-  const big: Record<string, [number, number]> = { blade: [1, 1], board: [1.2, 0.5], dial: [1.4, 0.35], cord: [1.2, 0.4], keys: [1.2, 0.45], switch: [0.8, 0.5], fuse: [1.1, 0.4], belt: [1.2, 0.8], battery: [1.2, 0.5], head: [1, 0.5], joint: [1.1, 0.6] };
+  const big: Record<string, [number, number]> = { blade: [1, 1], board: [1.2, 0.5], dial: [1.4, 0.35], cord: [1.2, 0.4], keys: [1.2, 0.45], switch: [0.8, 0.5], fuse: [1.1, 0.4], belt: [1.2, 0.8], battery: [1.2, 0.5], head: [1, 0.5], joint: [1.1, 0.6], ribbon: [1.2, 0.4], lcd: [1.2, 0.5], keypad: [1, 0.9], pedal: [1.1, 0.7], chip: [1, 0.7], crt: [1.2, 0.9], platter: [1, 1], pan: [1.1, 0.8] };
   const [kw, kh] = big[shape] ?? [0.8, 0.95];
   const w = s * kw, h = s * kh;
   if (mark === 'snapped' && shape === 'belt') { /* 끊어진 벨트는 아래에서 따로 그린다 */ } else
@@ -350,6 +503,25 @@ export function drawItemIcon(p: Painter, id: string, x: number, y: number, s = 1
       break;
     case 'phone':
       r(4, 12, 26, 16, '#1c1c1c'); r(6, 4, 22, 5, '#1c1c1c'); r(4, 6, 4, 6, '#1c1c1c'); r(26, 6, 4, 6, '#1c1c1c'); r(12, 15, 10, 10, '#e8e2d0'); r(16, 19, 2, 2, '#2a2a2a');
+      break;
+    case 'ricecooker':
+      r(4, 8, 26, 20, '#e8e2d0'); r(4, 27, 26, 1, '#8a8478'); r(6, 4, 22, 5, '#d0c9b6'); r(14, 2, 6, 3, '#8a8478'); r(9, 16, 4, 3, '#ff8a4a'); r(21, 16, 4, 3, '#7fbf6a'); r(14, 20, 6, 5, '#c0392b');
+      break;
+    case 'amp':
+      r(1, 10, 32, 14, '#c9c4b4'); r(1, 23, 32, 1, '#4f4a42'); r(4, 13, 7, 6, '#f3e2a6'); r(12, 13, 7, 6, '#f3e2a6'); r(7, 15, 1, 3, C.ink); r(15, 15, 1, 3, C.ink); r(23, 13, 7, 7, '#3a3027'); r(26, 14, 1, 3, C.cream);
+      break;
+    case 'turntable':
+      r(1, 12, 32, 16, '#6b4529'); r(4, 13, 20, 13, '#8d9297'); r(6, 14, 16, 11, '#141414'); r(12, 18, 4, 3, '#c0392b'); r(26, 12, 2, 10, '#d0d4d8'); r(22, 21, 5, 2, '#d0d4d8');
+      break;
+    case 'sewing':
+      r(3, 24, 28, 5, '#2a2a2a'); r(4, 8, 6, 17, '#2a2a2a'); r(4, 6, 24, 7, '#2a2a2a'); r(24, 6, 5, 14, '#2a2a2a'); r(26, 20, 1, 5, '#e0e0e0'); r(8, 8, 14, 2, '#c9a65a'); r(13, 3, 3, 4, '#c0392b');
+      break;
+    case 'tv':
+      r(2, 4, 30, 24, '#6b4529'); r(4, 6, 20, 18, '#1e2422'); r(6, 8, 16, 14, '#9aa6a0'); r(12, 11, 4, 4, '#e8eee9'); r(26, 8, 4, 4, '#2a2a2a'); r(26, 15, 4, 4, '#2a2a2a'); r(6, 28, 3, 2, '#2a2a2a'); r(25, 28, 3, 2, '#2a2a2a'); r(10, 0, 1, 4, C.steel); r(22, 0, 1, 4, C.steel);
+      break;
+    case 'calc':
+      r(8, 2, 18, 28, '#3a3a36'); r(10, 4, 14, 6, '#a9bc96'); r(17, 6, 5, 2, '#1c2418');
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) r(10 + j * 5, 12 + i * 4, 4, 3, j === 2 && i === 3 ? '#c0742b' : '#e8e2d0');
       break;
     case 'clock':
       r(9, 0, 14, 30, '#6b4529'); r(10, 1, 12, 28, '#5a3920'); r(11, 2, 10, 10, '#efe6cc'); r(15, 4, 1, 4, '#2b2a26'); r(15, 7, 3, 1, '#2b2a26'); r(12, 14, 8, 14, 'rgba(200,230,230,0.15)'); r(15, 14, 1, 9, C.brass); r(13, 22, 5, 5, '#d9b65e');

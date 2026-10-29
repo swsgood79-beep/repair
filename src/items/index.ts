@@ -6,8 +6,14 @@ import { cassette } from './cassette';
 import { clock } from './clock';
 import { iron } from './iron';
 import { phone } from './phone';
+import { ricecooker } from './ricecooker';
+import { amp } from './amp';
+import { turntable } from './turntable';
+import { sewing } from './sewing';
+import { tv } from './tv';
+import { calc } from './calc';
 
-export const ITEMS: ItemDef[] = [lamp, fan, radio, cassette, clock, iron, phone];
+export const ITEMS: ItemDef[] = [lamp, fan, radio, cassette, clock, iron, phone, ricecooker, amp, turntable, sewing, tv, calc];
 
 export function item(id: string): ItemDef {
   const found = ITEMS.find(i => i.id === id);

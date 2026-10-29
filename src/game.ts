@@ -9,11 +9,13 @@ export const SHELF_LIMIT = 6;
 
 /** 가게 키우기: 단계가 오를수록 고칠 수 있는 물건이 늘어난다 */
 export const SHOP_LEVELS = [
-  { level: 1, name: '골목 수리점', price: 0, items: ['lamp', 'fan'], desc: '할아버지가 남긴 한 칸짜리 가게' },
-  { level: 2, name: '작업대 넓히기', price: 120000, items: ['radio', 'cassette'], desc: '진공관과 카세트를 다룰 넓은 작업대와 부품장' },
-  { level: 3, name: '2층 공방', price: 250000, items: ['clock', 'iron'], desc: '시계 선반과 열기구 작업대가 있는 2층' },
-  { level: 4, name: '한결전파사 본점', price: 400000, items: ['phone'], desc: '간판을 새로 달고 통신기기까지 다루는 본점' },
+  { level: 1, name: '골목 수리점', price: 0, items: ['lamp', 'fan', 'radio', 'cassette', 'clock', 'iron', 'phone'], desc: '할아버지가 남긴 한 칸짜리 가게' },
+  { level: 2, name: '작업대 넓히기', price: 150000, items: ['ricecooker', 'amp'], desc: '살림 가전과 오디오를 올릴 넓은 작업대' },
+  { level: 3, name: '2층 공방', price: 300000, items: ['turntable', 'sewing'], desc: '기계 손질을 하는 조용한 2층 공방' },
+  { level: 4, name: '한결전파사 본점', price: 450000, items: ['tv', 'calc'], desc: '간판을 새로 달고 TV와 전자기기까지 다루는 본점' },
 ];
+/** 처음부터 고칠 수 있는 물건 */
+const STARTERS = () => Object.fromEntries(SHOP_LEVELS[0].items.map(id => [id, 1]));
 export const levelOf = (state: GameState) => state.level ?? 1;
 export function shelfLimit(state: GameState) { return SHELF_LIMIT + levelOf(state) - 1; }
 
@@ -60,7 +62,7 @@ export function newGame(seed = Date.now()): GameState {
     version: 2, seed: seed | 0, day: 1, minute: 0, money: 30000, debt: START_DEBT, trust: 3,
     jobs: [], active: null, tools: [], casebook: [], arrivals: [],
     summary: { day: 1, income: 0, parts: 0, expenses: 0, returned: 0, lost: 0 },
-    history: [], pending: [], ending: null, endless: false, tutorial: 0, nextId: 1, sound: true, music: true, level: 1, unlocked: { lamp: 1, fan: 1 },
+    history: [], pending: [], ending: null, endless: false, tutorial: 0, nextId: 1, sound: true, music: true, level: 1, unlocked: STARTERS(),
   };
   const first = makeJob(state, 'lamp', ['bulb_open'], 1);
   const second = makeJob(state, 'fan', ['cap_dead'], 0);
@@ -82,7 +84,8 @@ export function load(): GameState | null {
     if (data?.version !== 2 || !Array.isArray(data.jobs)) return null;
     for (const job of [...data.jobs, ...data.pending]) item(job.itemId);
     data.level ??= 1;
-    data.unlocked ??= { lamp: 1, fan: 1 };
+    data.unlocked ??= STARTERS();
+    for (const id of SHOP_LEVELS[0].items) data.unlocked[id] ??= 1;
     return data;
   } catch { return null; }
 }
@@ -123,7 +126,7 @@ function makeJob(state: GameState, itemId: string, faults: string[], customer = 
 }
 
 function randomJob(state: GameState): Job {
-  const unlocked = state.unlocked ?? { lamp: 1, fan: 1 };
+  const unlocked = state.unlocked ?? STARTERS();
   const items = ITEMS.filter(i => unlocked[i.id] !== undefined);
   const fresh = items.filter(i => unlocked[i.id] >= state.day - 2 && unlocked[i.id] > 1);
   const def = fresh.length && rand(state) < 0.5 ? pick(state, fresh) : pick(state, items);

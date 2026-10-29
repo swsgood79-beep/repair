@@ -124,13 +124,14 @@ export class Painter {
   }
 
   /** 7-세그먼트 숫자 (계기판) */
-  seg(s: string, x: number, y: number, h: number, on: string, off: string) {
+  seg(s: string, x: number, y: number, h: number, on: string, off: string, miss = false) {
     const w = Math.round(h * 0.55), t = Math.max(1, Math.round(h / 9));
     const MAP: Record<string, string> = { '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc', '5': 'afgcd', '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcfgd', '-': 'g', ' ': '', 'L': 'fed', 'o': 'gcde', 'E': 'afged' };
-    let cx = x;
+    let cx = x, i = 0;
     for (const ch of s) {
+      i++;
       if (ch === '.') { this.rect(cx - t - 1, y + h - t, t, t, on); continue; }
-      const lit = MAP[ch] ?? '';
+      const lit = (MAP[ch] ?? '').replace(miss ? (i % 2 ? /[gb]/g : /[ge]/g) : /$^/, '');
       const segs: Record<string, [number, number, number, number]> = {
         a: [t, 0, w - 2 * t, t], b: [w - t, t, t, h / 2 - t], c: [w - t, h / 2, t, h / 2 - t], d: [t, h - t, w - 2 * t, t],
         e: [0, h / 2, t, h / 2 - t], f: [0, t, t, h / 2 - t], g: [t, h / 2 - t / 2, w - 2 * t, t],

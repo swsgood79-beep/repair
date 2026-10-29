@@ -8,7 +8,7 @@ import { button, region, ui } from './core';
  * 수리 손맛: 실제 작업 순서를 단계별 미니게임으로 진행한다.
  * 실패하면 그 단계를 다시 하고, 모든 단계를 마치면 onDone이 불린다.
  */
-type StepKind = 'unscrew' | 'screwIn' | 'twistOut' | 'twistIn' | 'desolder' | 'pull' | 'insert' | 'solder' | 'strip' | 'spray' | 'scrub' | 'drops' | 'route' | 'beat' | 'bend' | 'tap' | 'belt';
+type StepKind = 'unscrew' | 'screwIn' | 'twistOut' | 'twistIn' | 'desolder' | 'pull' | 'insert' | 'solder' | 'strip' | 'spray' | 'scrub' | 'drops' | 'route' | 'beat' | 'bend' | 'tap' | 'belt' | 'trim';
 interface Step { kind: StepKind; label: string; leg?: number; n?: number }
 
 interface Mini {
@@ -38,7 +38,7 @@ export function startScrews(comp: Comp, n: number, title: string, onDone: () => 
   });
 }
 
-const SOLDERED_SAFE = new Set(['cord', 'bulb', 'fuse', 'outtube', 'roller', 'barrel', 'susp', 'bearing', 'belt', 'mic', 'neon']);
+const SOLDERED_SAFE = new Set(['cord', 'bulb', 'fuse', 'outtube', 'roller', 'barrel', 'susp', 'bearing', 'belt', 'mic', 'neon', 'pan', 'idler', 'cart', 'vert', 'lcd', 'ribbon', 'relay', 'pedal', 'magnet']);
 export function startRepairMini(comp: Comp, action: Action, onDone: (redo: number) => void, onCancel: () => void) {
   const steps: Step[] = [];
   const legs = (verb: 'desolder' | 'solder', what: string) => [0, 1].forEach(leg => steps.push({ kind: verb, leg, label: `${what} (${leg + 1}/2)` }));
@@ -50,6 +50,9 @@ export function startRepairMini(comp: Comp, action: Action, onDone: (redo: numbe
     else if (comp.id === 'escape') steps.push({ kind: 'beat', label: '앵커를 굽혀 똑·딱 간격을 같게 맞추자' });
     else if (comp.id === 'train') steps.push({ kind: 'bend', label: '휜 톱니를 펜치로 끌어 기준선에 맞추자' });
     else if (comp.id === 'thermo') steps.push({ kind: 'bend', label: '붙은 접점을 펜치로 떼어 간격을 기준선에 맞추자' });
+    else if (comp.id === 'pitch') steps.push({ kind: 'trim', label: '스트로보 점이 멈출 때까지 속도 나사를 돌리자' });
+    else if (comp.id === 'vhold') steps.push({ kind: 'trim', label: '흐르는 화면이 멈출 때까지 수직 동기를 돌리자' });
+    else if (comp.id === 'hook') steps.push({ kind: 'trim', label: '가마 끝이 바늘 뒤를 스칠 때까지 가마를 돌려 맞추자' });
     else steps.push({ kind: 'tap', label: '망치로 고정 핀을 톡톡 박자' });
   } else if (comp.shape === 'bulb') steps.push({ kind: 'twistOut', label: '헌 전구를 반시계로 돌려 빼자', n: 2 }, { kind: 'insert', label: '새 전구를 소켓에 끼우자' }, { kind: 'twistIn', label: '시계 방향으로 돌려 조이자', n: 2 });
   else if (comp.id === 'cord') steps.push({ kind: 'strip', label: '스트리퍼로 피복을 표시선까지 벗기자' }, { kind: 'twistIn', label: '단자에 감고 나사를 시계 방향으로 조이자', n: 1 });
@@ -116,6 +119,7 @@ function initStep() {
     case 'bend': d.angle = 28; break;
     case 'tap': d.taps = 0; d.swing = 0; break;
     case 'belt': d.at = 0; break;
+    case 'trim': d.a = 0; d.target = 2.2 + Math.random() * 2.5; d.hold = 0; break;
   }
 }
 
@@ -395,6 +399,55 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     p.label(`톡톡 ${d.taps}/4`, CX, CY + 70, 12, C.gold);
     region({ id: 'mini-focus', x: CX - 90, y: CY - 90, w: 180, h: 160, down: () => { d.taps++; d.swing = ui.now + 0.15; sfx('hammer'); if (d.taps >= 4) { say('핀이 꽉 박혔다'); next(); } } });
   },
+  trim(p, t, m) {
+    const d = m.d;
+    const gx = CX - 70, gy = CY + 20, r = 46;
+    const err = d.a - d.target;
+    const near = Math.abs(err) < 0.18;
+    // 조정 나사
+    p.disc(gx, gy, r + 8, '#2f5b3c'); p.ring(gx, gy, r + 8, '#1b3523', 2);
+    p.disc(gx, gy, r, '#e6e0cc'); p.ring(gx, gy, r, '#6d5214', 2);
+    p.line(gx - Math.cos(d.a) * (r - 6), gy - Math.sin(d.a) * (r - 6), gx + Math.cos(d.a) * (r - 6), gy + Math.sin(d.a) * (r - 6), '#3a2a10', 5);
+    arrowRing(p, gx, gy, r + 18, 1, t);
+    // 결과 보기: 어긋난 만큼 흐르고, 맞으면 멈춘다
+    const bx = CX + 60, by = CY - 50, bw = 170, bh = 120;
+    p.box(bx, by, bw, bh, '#1e2422', C.ink);
+    const drift = err * 60;
+    const kind = m.comp.id;
+    p.g.save(); p.g.beginPath(); p.g.rect(bx + 2, by + 2, bw - 4, bh - 4); p.g.clip();
+    if (kind === 'vhold') {
+      const o = ((t * drift) % bh + bh) % bh;
+      for (const k of [o - bh, o]) { p.rect(bx, by + k, bw, bh, '#9aa6a0'); p.disc(bx + bw / 2, by + k + 50, 22, '#e8eee9'); p.rect(bx + bw / 2 - 14, by + k + 70, 28, 40, '#2a302d'); p.rect(bx, by + k + bh - 8, bw, 8, '#0b0e0d'); }
+    } else if (kind === 'hook') {
+      const ny = by + 20 + (Math.sin(t * 6) * 0.5 + 0.5) * 50;
+      p.rect(bx + bw / 2 - 1, by, 2, ny - by, '#e0e0e0');
+      const ha = t * 6 + err;
+      p.ring(bx + bw / 2, by + 90, 26, '#8d9297', 3);
+      p.disc(bx + bw / 2 + Math.cos(ha) * 26, by + 90 + Math.sin(ha) * 26, 4, near ? C.ok : C.red);
+      p.label(near ? '실이 걸린다!' : '헛돈다', bx + bw / 2, by + 6, 10, near ? C.ok : C.cream);
+    } else {
+      p.disc(bx + bw / 2, by + bh / 2, 52, '#8d9297');
+      for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2 + t * drift * 0.05; p.rect(bx + bw / 2 + Math.cos(a) * 46 - 2, by + bh / 2 + Math.sin(a) * 46 - 2, 4, 4, i % 2 ? '#e0e0e0' : '#3c4044'); }
+      p.disc(bx + bw / 2, by + bh / 2, 30, '#141414');
+    }
+    p.g.restore();
+    p.label(near ? '멈췄다! 손을 떼자' : err < 0 ? '시계 방향으로 더' : '너무 돌렸다, 반대로', bx + bw / 2, by + bh + 8, 11, near ? C.ok : C.gold);
+    let last: number | null = null;
+    region({
+      id: 'mini-focus', x: gx - r - 20, y: gy - r - 20, w: (r + 20) * 2, h: (r + 20) * 2,
+      down: (x, y) => { last = angleOf(x, y, gx, gy); },
+      drag: (x, y) => {
+        if (last === null) return;
+        const a = angleOf(x, y, gx, gy);
+        const delta = wrap(a - last);
+        last = a;
+        if (Math.abs(delta) > 1.1) return;
+        d.a = Math.max(-1, Math.min(7, d.a + delta * 0.5));
+        if (Math.random() < 0.15) sfx('ratchet', 0.4);
+      },
+      up: () => { last = null; if (Math.abs(d.a - d.target) < 0.18) { say('딱 맞았다!'); next(); } else say('아직 어긋났다', true); },
+    });
+  },
   belt(p, t, m) {
     const d = m.d;
     const a = [CX - 120, CY + 30], b = [CX + 110, CY - 10];
@@ -558,7 +611,12 @@ function specsOf(c: Comp): string[] {
     switch: ['250V 3A', '12V 1A', '250V 15A'], roller: ['Ø10', 'Ø8', 'Ø12'], barrel: ['8일 태엽', '1일 태엽', '30시간'], susp: ['0.1mm', '0.3mm', '0.05mm'],
     bearing: ['Ø6', 'Ø8', 'Ø4'], belt: ['Ø60', 'Ø45', 'Ø80'], cord: ['0.75㎟', '0.3㎟', '1.5㎟'],
     element: ['600W', '1200W', '300W'], thermo: ['바이메탈', '서미스터', '리드 스위치'], neon: ['네온 220V', 'LED 12V', '꼬마전구 6V'],
-    ringer: ['1kΩ 코일', '10Ω 코일', '100kΩ 코일'], mic: ['카본', '다이내믹', '크리스털'], hook: ['3접점', '2접점', '5접점'],
+    ringer: ['1kΩ 코일', '10Ω 코일', '100kΩ 코일'], bell: ['1kΩ 코일', '10Ω 코일', '100kΩ 코일'], mic: ['카본', '다이내믹', '크리스털'], hook: ['3접점', '2접점', '5접점'],
+    pan: ['1.8L 내솥', '1.0L 내솥', '3.6L 내솥'], magnet: ['103℃ 자석', '70℃ 자석', '150℃ 자석'], warmer: ['보온 40W', '보온 400W', '보온 4W'],
+    spL: ['8Ω 20W', '4Ω 5W', '16Ω 2W'], spR: ['8Ω 20W', '4Ω 5W', '16Ω 2W'], trL: ['2SC1061', '2SC945', '2SA733'], trR: ['2SC1061', '2SC945', '2SA733'], relay: ['DC 24V', 'DC 5V', 'AC 220V'],
+    xfmr: ['220V→24V', '220V→6V', '220V→110V'], idler: ['Ø22 고무', 'Ø18 고무', 'Ø30 고무'], cart: ['세라믹 바늘', 'MM 바늘', '쇠바늘'],
+    flyback: ['흑백용 고압', '컬러용 고압', '전원 트랜스'], vert: ['6BM8', '6V6', '12AX7'], chip: ['계산 LSI', '시계 LSI', '음성 LSI'],
+    lcd: ['8자리 표시창', '6자리 표시창', '12자리 표시창'], ribbon: ['14핀 띠', '10핀 띠', '20핀 띠'],
   };
   if (c.id === 'motor') return c.ohm === 12 ? ['DC 6V', 'DC 12V', 'DC 3V'] : ['AC 220V', 'AC 110V', 'DC 12V'];
   return table[c.id] ?? ['정품', '유사품 A', '유사품 B'];
