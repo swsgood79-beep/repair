@@ -1,0 +1,1 @@
+:root{color-scheme:dark}html,body{height:100%;margin:0;background:#0d1210;overflow:hidden}#app{height:100%;display:grid;place-items:center}.screen{position:relative;touch-action:none;user-select:none;-webkit-user-select:none}.screen canvas{display:block}.pix{image-rendering:pixelated;image-rendering:crisp-edges}.txt{position:absolute;top:0;right:0;bottom:0;left:0}
