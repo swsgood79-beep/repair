@@ -1,7 +1,8 @@
 import { Painter, W, H } from '../gfx/painter';
 import { load, newGame, save } from '../game';
 import { playMusic, setAudioPrefs, setLoop, unlockAudio, updateSound } from '../audio';
-import { holder, hit, pan, resetRegions, ui, type Region } from './core';
+import { installProbe, overlaps } from '../gfx/probe';
+import { holder, hit, pan, regionById, regionIds, resetRegions, ui, type Region } from './core';
 import { drawAccuse, drawBench } from './bench';
 import { drawCounter, drawEnding, drawHud, drawOverlay, drawTitle } from './scenes';
 import { drawTutorial } from './tutorial';
@@ -10,6 +11,8 @@ import { activeJob, simulate } from '../game';
 
 let painter: Painter;
 let active: Region | null = null;
+/** 개발용 글자 겹침 검사 (?probe) */
+let probe: ReturnType<typeof installProbe> | null = null;
 /** 끌어서 옮기는 중인가 */
 let drag0: [number, number] | null = null, panning = false, last: [number, number] = [0, 0];
 let lastSave = 0;
@@ -25,6 +28,7 @@ export function start(root: HTMLElement) {
   wrap.append(pix, txt);
   root.append(wrap);
   painter = new Painter(pix, txt);
+  if (location.search.includes('probe')) { probe = installProbe(painter.t, W); (window as any).__overlaps = () => overlaps((window as any).__texts ?? []); (window as any).__click = (id: string) => { const r = regionById(id); r?.down?.(r.x + 1, r.y + 1); r?.up?.(); r?.click?.(); return !!r; }; (window as any).__ids = () => regionIds(); }
 
   const saved = load();
   holder.state = saved ?? newGame();
@@ -91,6 +95,7 @@ export function start(root: HTMLElement) {
     ui.now = t;
     frame(t);
     if (t - lastSave > 5) { lastSave = t; save(holder.state); }
+    probe?.end();
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
@@ -98,6 +103,7 @@ export function start(root: HTMLElement) {
 
 function frame(t: number) {
   const p = painter;
+  probe?.begin();
   p.begin();
   resetRegions();
   pan.on = false;

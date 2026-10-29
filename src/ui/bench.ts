@@ -207,9 +207,27 @@ function drawTicket(p: Painter, job: Job | null, t: number) {
   p.text(job.comeback ? '무상' : won(payFor(job)), 402, 25, 10, job.wrong ? C.red : C.ink, 'right', 700);
 }
 
+/** 작업대 이름표 자리: 서로, 그리고 아래 상태 띠와 겹치지 않게 놓는다 */
+let placed: { x: number; y: number; w: number; h: number }[] = [];
+function placeLabel(p: Painter, text: string, cx: number, below: number, above: number, size: number, color: string) {
+  const S = STAGE;
+  const w = p.measure(text, size, 700) + 4, h = size + 4;
+  const top = S.y + 2, bottom = S.y + S.h - 19 - h;
+  // 확대해서 화면 밖에 있는 부품은 이름표도 그리지 않는다
+  if (cx < S.x || cx > S.x + S.w || above > S.y + S.h - 17 || below < S.y) return;
+  const clamp = (y: number) => Math.max(top, Math.min(bottom, y));
+  const x = Math.max(S.x + 2, Math.min(S.x + S.w - 2 - w, cx - w / 2));
+  const hits = (y: number) => placed.some(b => x < b.x + b.w && x + w > b.x && y < b.y + b.h && y + h > b.y);
+  const cands = [clamp(below), clamp(above - h), clamp(below + h), clamp(above - h * 2)];
+  const y = cands.find(c => !hits(c)) ?? cands[0];
+  placed.push({ x, y, w, h });
+  p.label(text, x + w / 2, y + 1, size, color);
+}
+
 function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof simulate>, status: Record<string, Status>, t: number) {
   const S = STAGE;
   updateCamera();
+  placed = [];
   p.round(S.x, S.y, S.w, S.h, C.ink, 2);
   p.g.save(); p.g.beginPath(); p.g.rect(S.x + 1, S.y + 1, S.w - 2, S.h - 2); p.g.clip();
   p.t.save(); p.t.beginPath(); p.t.rect(S.x + 1, S.y + 1, S.w - 2, S.h - 2); p.t.clip();
@@ -235,9 +253,16 @@ function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof si
   // 지금 상태 띠
   const alive = Object.values(sim.fx.glow ?? {}).some(v => v > 0) || sim.fx.spin || sim.fx.swing || sim.fx.tone;
   p.rect(S.x + 1, S.y + S.h - 17, S.w - 2, 16, 'rgba(10,16,13,0.85)');
+  p.clearText(S.x + 1, S.y + S.h - 18, S.w - 2, 18);
   p.rect(S.x + 1, S.y + S.h - 17, 3, 16, alive ? C.ok : C.warn);
-  p.text(`지금  ${sim.obs}`, S.x + 9, S.y + S.h - 15, 10, C.cream, 'left', 700);
-  p.text(TOOLS.find(x => x.id === ui.tool)?.hint ?? '', S.x + S.w - 6, S.y + S.h - 14, 9, C.sage, 'right', 500);
+  // 상태 글이 길면 오른쪽 안내를 감추고, 그래도 길면 글씨를 줄인다
+  const obs = `지금  ${sim.obs}`;
+  const hintText = TOOLS.find(x => x.id === ui.tool)?.hint ?? '';
+  const room = S.w - 18;
+  const obsSize = p.measure(obs, 10, 700) <= room ? 10 : p.measure(obs, 9, 700) <= room ? 9 : 8;
+  p.text(obs, S.x + 9, S.y + S.h - 15 + (10 - obsSize) / 2, obsSize, C.cream, 'left', 700);
+  const showHint = p.measure(obs, obsSize, 700) + p.measure(hintText, 9, 500) + 24 <= room;
+  if (showHint) p.text(hintText, S.x + S.w - 6, S.y + S.h - 14, 9, C.sage, 'right', 500);
 }
 
 function decor(p: Painter, def: ItemDef) {
@@ -418,7 +443,7 @@ function drawComp(p: Painter, c: Comp, job: Job, sim: ReturnType<typeof simulate
   else if (st === 'zone') frame('#d98a2b');
   if (hovered) frame(C.gold);
   if (fx.note?.comp === c.id && ui.now - fx.note.t0 < 6) { const rr = Math.max(r.w, r.h) / 2 + 6 + Math.sin(t * 8) * 2; p.ring(r.x + r.w / 2, r.y + r.h / 2, rr, C.glow, 2); }
-  p.label(c.short, r.x + r.w / 2, r.y + r.h + 1, 8, hovered ? C.gold : st === 'lead' ? '#ff9a86' : C.cream);
+  placeLabel(p, c.short, r.x + r.w / 2, r.y + r.h + 1, r.y - 1, 8, hovered ? C.gold : st === 'lead' ? '#ff9a86' : C.cream);
   if (st === 'pass') p.label('✓', r.x + r.w - 1, r.y - 6, 9, C.ok);
   if (!job.found[c.id] && (c.acts.length || c.part || c.hand)) sparkle(p, r.x + r.w - 2, r.y + 2, t, c.x % 7);
   const pad = Math.max(0, 14 - Math.min(r.w, r.h)) / 2;
@@ -435,7 +460,7 @@ function drawTP(p: Painter, tp: TestPoint, job: Job, t: number) {
   p.disc(x, y, 4, color);
   p.rect(x - 1, y - 2, 2, 1, 'rgba(255,255,255,0.6)');
   if (ui.hover === id) { p.ring(x, y, 7, C.gold); p.label(tp.label, x, y - 18, 8, C.gold); }
-  if (r) p.label(tpText(tp, r), x, y + 6, 8, color);
+  if (r) placeLabel(p, tpText(tp, r), x, y + 6, y - 6, 8, color);
   else sparkle(p, x + 5, y - 5, t, tp.x % 5);
   region({ id, x: x - 8, y: y - 8, w: 16, h: 16, click: () => applyTool({ tp: tp.id }) });
 }

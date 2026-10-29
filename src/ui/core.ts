@@ -85,6 +85,7 @@ export function hit(x: number, y: number) {
   return null;
 }
 export function regionById(id: string) { return regions.find(r => r.id === id) ?? null; }
+export function regionIds() { return regions.map(r => r.id); }
 
 export function toast(text: string, bad = false) {
   if (!text) return;

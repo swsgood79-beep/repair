@@ -461,7 +461,8 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       labels.forEach((l, i) => {
         const kx = x + 5 + (i % 4) * kw, ky = y + 5 + Math.floor(i / 4) * kh;
         p.box(kx + 2, ky + 2, kw - 4, kh - 4, i % 4 === 3 || l === '=' ? '#c0742b' : '#e8e2d0', '#16110c');
-        p.label(l, kx + kw / 2, ky + kh / 2 - 6, 11, i % 4 === 3 || l === '=' ? C.white : '#2a2a2a');
+        const fs = Math.min(11, Math.floor(kh * 0.55));
+        if (fs >= 7) p.label(l, kx + kw / 2, ky + kh / 2 - fs * 0.55, fs, i % 4 === 3 || l === '=' ? C.white : '#2a2a2a');
       });
       break;
     }
