@@ -11,10 +11,10 @@ import {
   repairMinutes, setCtx, setOpen, simulate, useTool, visible, watch, won,
 } from '../game';
 import { sfx } from '../audio';
-import { button, holder, region, regionById, toast, ui } from './core';
+import { button, holder, pan, region, regionById, toast, ui } from './core';
 import { FEEL_WORD, HEAT_WORD, SOUND_WORD, BAD_SOUND, BAD_FEEL, ohmText, tpState, tpText } from './words';
 import { cluesOf, statusOf, suspects, type Clue, type Status } from './clues';
-import { setMiniItem, startRepairMini, startScrews } from './mini';
+import { miniActive, setMiniItem, startRepairMini, startScrews } from './mini';
 
 /* ---------- 배치 ---------- */
 export const STAGE = { x: 4, y: 52, w: 404, h: 212 };
@@ -33,6 +33,14 @@ function updateCamera() {
   OY = STAGE.y + STAGE.h / 2 - fy * K;
 }
 export function zoomTo(x: number, y: number, z = 2.2) { cam.tz = z; cam.tfx = x; cam.tfy = y; }
+/** 확대 상태에서 끌면 카메라를 옮긴다 (화면 밖으로는 못 나감) */
+function panBy(dx: number, dy: number) {
+  const k = K0 * cam.tz;
+  const halfW = STAGE.w / 2 / k, halfH = STAGE.h / 2 / k;
+  cam.tfx = Math.max(halfW - 20, Math.min(660 - halfW, cam.tfx - dx / k));
+  cam.tfy = Math.max(halfH - 10, Math.min(390 - halfH, cam.tfy - dy / k));
+  cam.fx = cam.tfx; cam.fy = cam.tfy;
+}
 export function zoomOut() { cam.tz = 1; cam.tfx = 320; cam.tfy = 190; }
 const mx = (v: number) => OX + v * K;
 const my = (v: number) => OY + v * K;
@@ -217,7 +225,10 @@ function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof si
   for (const c of outer) drawComp(p, c, job, sim, status, t);
   for (const tp of def.tps) if (visible(job, tp.layer)) drawTP(p, tp, job, t);
   p.g.restore(); p.t.restore();
+  pan.on = cam.tz > 1.01 && !ui.overlay && !miniActive();
+  pan.area = S; pan.move = panBy;
   if (cam.tz > 1.01) {
+    p.label('끌어서 이동', S.x + S.w - 112, S.y + 9, 9, 'rgba(240,226,192,0.8)');
     p.rect(S.x + 1, S.y + 1, S.w - 2, 1, C.gold); p.rect(S.x + 1, S.y + S.h - 2, S.w - 2, 1, C.gold);
     button(p, 'zoom-out', S.x + S.w - 70, S.y + 4, 64, 20, '전체 보기', () => zoomOut(), { kind: 'quiet', size: 10 });
   }

@@ -66,6 +66,13 @@ export const ui = {
 
 export const holder = { state: null as unknown as GameState };
 
+/** 확대한 작업대를 손가락으로 끌어 옮기기. 작업대가 매 프레임 채운다 */
+export const pan = {
+  on: false,
+  area: { x: 0, y: 0, w: 0, h: 0 },
+  move: (_dx: number, _dy: number) => {},
+};
+
 let regions: Region[] = [];
 export function resetRegions() { regions = []; }
 export function region(r: Region) { regions.push(r); return r; }

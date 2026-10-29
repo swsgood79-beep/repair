@@ -1,7 +1,7 @@
 import { Painter, W, H } from '../gfx/painter';
 import { load, newGame, save } from '../game';
 import { playMusic, setAudioPrefs, setLoop, unlockAudio, updateSound } from '../audio';
-import { holder, hit, resetRegions, ui, type Region } from './core';
+import { holder, hit, pan, resetRegions, ui, type Region } from './core';
 import { drawAccuse, drawBench } from './bench';
 import { drawCounter, drawEnding, drawHud, drawOverlay, drawTitle } from './scenes';
 import { drawTutorial } from './tutorial';
@@ -10,6 +10,8 @@ import { activeJob, simulate } from '../game';
 
 let painter: Painter;
 let active: Region | null = null;
+/** 끌어서 옮기는 중인가 */
+let drag0: [number, number] | null = null, panning = false, last: [number, number] = [0, 0];
 let lastSave = 0;
 
 export function start(root: HTMLElement) {
@@ -50,6 +52,9 @@ export function start(root: HTMLElement) {
     active = r;
     ui.pressed = r?.id ?? '';
     if (r && !r.disabled) r.down?.(x, y);
+    const A = pan.area;
+    drag0 = pan.on && x >= A.x && x < A.x + A.w && y >= A.y && y < A.y + A.h && !(r?.drag) ? [x, y] : null;
+    panning = false; last = [x, y];
     txt.setPointerCapture(e.pointerId);
   });
   txt.addEventListener('pointermove', e => {
@@ -58,6 +63,9 @@ export function start(root: HTMLElement) {
     const r = hit(x, y);
     ui.hover = r?.id ?? '';
     txt.style.cursor = r && !r.disabled && (r.click || r.down) ? 'pointer' : 'default';
+    if (drag0 && !panning && Math.hypot(x - drag0[0], y - drag0[1]) > 6) { panning = true; ui.pressed = ''; }
+    if (panning) { pan.move(x - last[0], y - last[1]); last = [x, y]; txt.style.cursor = 'grabbing'; return; }
+    last = [x, y];
     if (active?.drag) active.drag(x, y);
   });
   const release = (e: PointerEvent) => {
@@ -66,8 +74,11 @@ export function start(root: HTMLElement) {
     const a = active;
     active = null;
     ui.pressed = '';
-    if (!a) return;
+    if (!a) { drag0 = null; panning = false; return; }
     a.up?.();
+    const wasPan = panning;
+    drag0 = null; panning = false;
+    if (wasPan) return;
     if (r && r.id === a.id && !a.disabled) a.click?.();
     if (e.pointerType !== 'mouse') ui.hover = '';
   };
@@ -89,6 +100,7 @@ function frame(t: number) {
   const p = painter;
   p.begin();
   resetRegions();
+  pan.on = false;
   let fx = {};
   if (ui.scene === 'title') drawTitle(p, t);
   else if (ui.scene === 'counter') drawCounter(p, t);
