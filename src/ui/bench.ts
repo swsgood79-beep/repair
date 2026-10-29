@@ -3,6 +3,7 @@ import { item } from '../items';
 import { STATIONS } from '../items/radio';
 import { C, Painter } from '../gfx/painter';
 import { darken, lighten } from '../gfx/art';
+import { BODY, body, coverPlate, grille, screwHead, type Material } from '../gfx/props';
 import { benchMat, woodStrip } from './backdrops';
 import { drawCloseup, drawCustomer, drawPart, drawToolIcon } from '../gfx/parts';
 import {
@@ -13,7 +14,7 @@ import { sfx } from '../audio';
 import { button, holder, region, regionById, toast, ui } from './core';
 import { FEEL_WORD, HEAT_WORD, SOUND_WORD, BAD_SOUND, BAD_FEEL, ohmText, tpState, tpText } from './words';
 import { cluesOf, statusOf, suspects, type Clue, type Status } from './clues';
-import { startRepairMini, startScrews } from './mini';
+import { setMiniItem, startRepairMini, startScrews } from './mini';
 
 /* ---------- 배치 ---------- */
 export const STAGE = { x: 4, y: 52, w: 404, h: 212 };
@@ -210,7 +211,7 @@ function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof si
   decor(p, def);
   const inner = def.comps.filter(c => c.layer > 0 && visible(job, c.layer));
   const outer = def.comps.filter(c => c.layer === 0 && !(c.front && job.open > 0));
-  if (job.open > 0) { drawWires(p, def, job, () => true); for (const c of inner) drawComp(p, c, job, sim, status, t); }
+  if (job.open > 0) { interior(p, def); drawWires(p, def, job, () => true); for (const c of inner) drawComp(p, c, job, sim, status, t); }
   drawCover(p, def, job, t);
   if (job.open === 0) drawWires(p, def, job, l => l === 0);
   for (const c of outer) drawComp(p, c, job, sim, status, t);
@@ -230,67 +231,103 @@ function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof si
 
 function decor(p: Painter, def: ItemDef) {
   const R = (x: number, y: number, w: number, h: number, c: string) => p.rect(mx(x), my(y), w * K, h * K, c);
-  const B = (x: number, y: number, w: number, h: number, c: string, e = C.ink) => p.box(mx(x), my(y), w * K, h * K, c, e);
+  const M = (x: number, y: number, w: number, h: number, c: string, mat: Material) => body(p, mx(x), my(y), w * K, h * K, c, mat);
+  const G = (x: number, y: number, w: number, h: number, c: string) => grille(p, mx(x), my(y), w * K, h * K, c);
+  /** 바닥 그림자 */
+  const S = (x: number, y: number, w: number, h: number) => p.round(mx(x) + 4, my(y) + 5, w * K, h * K, 'rgba(0,0,0,0.32)', 3);
   switch (def.id) {
     case 'lamp':
+      S(132, 262, 376, 86);
       for (let i = 0; i < 18; i++) {
         const x0 = 232 - i * 2.4, w0 = 176 + i * 4.8;
         R(x0, 50 + i * 5.5, w0, 6, i < 2 ? '#2b524d' : '#3d6f69');
-        if (i >= 2) { R(x0, 50 + i * 5.5, w0 * 0.18, 6, '#4f8a80'); R(x0 + w0 * 0.82, 50 + i * 5.5, w0 * 0.18, 6, '#2f5a54'); }
+        if (i >= 2) { R(x0, 50 + i * 5.5, w0 * 0.18, 6, '#4f8a80'); R(x0 + w0 * 0.82, 50 + i * 5.5, w0 * 0.18, 6, '#2f5a54'); R(x0 + w0 * 0.24, 50 + i * 5.5, w0 * 0.05, 6, '#5aa096'); }
       }
       R(190, 146, 260, 3, '#5aa096');
-      R(314, 190, 12, 74, C.brass); R(314, 190, 3, 74, '#e2c070'); R(323, 190, 3, 74, '#8a6a1f'); B(132, 262, 376, 86, '#4f8a80'); R(136, 266, 368, 4, '#6aa69a');
+      R(314, 190, 12, 74, C.brass); R(314, 190, 3, 74, '#e2c070'); R(323, 190, 3, 74, '#8a6a1f');
+      M(132, 262, 376, 86, '#4f8a80', 'plastic');
       break;
     case 'fan':
-      R(160, 270, 14, 40, C.steel2); B(60, 300, 230, 44, '#4f8a80'); B(292, 70, 276, 178, '#4f8a80'); R(298, 76, 264, 4, '#6aa69a'); B(372, 282, 152, 52, '#3b6b63');
+      S(292, 70, 276, 178); S(60, 300, 230, 44);
+      R(160, 270, 14, 40, C.steel2); R(160, 270, 4, 40, '#8b969b');
+      M(60, 300, 230, 44, '#4f8a80', 'plastic'); M(292, 70, 276, 178, '#4f8a80', 'plastic'); M(372, 282, 152, 52, '#3b6b63', 'plastic');
       break;
     case 'radio':
-      B(40, 30, 560, 320, '#6b4529', '#2b1a0e'); B(52, 42, 536, 296, '#5a3920', '#3f2714');
-      B(64, 100, 136, 150, '#8a6f4c', '#3f2714');
-      for (let i = 0; i < 9; i++) R(70, 110 + i * 16, 124, 3, '#6e5536');
+      S(40, 30, 560, 320);
+      M(40, 30, 560, 320, '#6b4529', 'wood'); M(52, 42, 536, 296, '#5a3920', 'wood');
+      G(64, 100, 136, 150, '#9a8058');
+      for (let i = 0; i < 3; i++) R(64, 140 + i * 40, 136, 3, '#5a3920');
       break;
     case 'cassette':
-      B(84, 60, 486, 282, '#b9b2a3', '#4f4a42'); R(90, 66, 474, 4, '#d6d0c2'); B(104, 106, 166, 62, '#2c2a28', '#111');
+      S(84, 60, 486, 282);
+      M(84, 60, 486, 282, '#b9b2a3', 'plastic'); M(104, 106, 166, 62, '#2c2a28', 'enamel');
+      R(110, 112, 154, 4, 'rgba(255,255,255,0.12)');
+      G(470, 70, 90, 60, '#8a8478');
       break;
     case 'iron':
-      // 손잡이와 몸통
-      B(150, 70, 380, 170, '#b8392b', '#5a1a12'); R(156, 76, 368, 4, '#d9574a');
-      B(200, 20, 280, 40, '#2a2a2a', '#000'); B(200, 20, 30, 70, '#2a2a2a', '#000'); B(450, 20, 30, 70, '#2a2a2a', '#000');
+      S(150, 70, 380, 170);
+      M(150, 70, 380, 170, '#b8392b', 'plastic');
+      M(200, 20, 280, 40, '#2a2a2a', 'enamel'); M(200, 20, 30, 70, '#2a2a2a', 'enamel'); M(450, 20, 30, 70, '#2a2a2a', 'enamel');
       break;
     case 'phone':
-      B(150, 120, 340, 220, '#1c1c1c', '#000'); R(156, 126, 328, 4, '#3a3a3a');
-      B(170, 60, 300, 60, '#1c1c1c', '#000');
+      S(150, 120, 340, 220);
+      M(150, 120, 340, 220, '#1c1c1c', 'enamel'); M(170, 60, 300, 60, '#1c1c1c', 'enamel');
       break;
     case 'ricecooker':
-      B(180, 40, 280, 250, '#e8e2d0', '#5a5448'); R(186, 46, 268, 4, '#f6f2e6'); B(200, 30, 240, 30, '#d0c9b6', '#5a5448');
-      B(236, 196, 168, 50, '#c9c1aa', '#5a5448');
+      S(180, 40, 280, 250);
+      M(180, 40, 280, 250, '#e8e2d0', 'plastic'); M(200, 30, 240, 30, '#d0c9b6', 'plastic');
+      R(180, 150, 280, 4, '#c0392b'); R(180, 156, 280, 2, '#8a2a1e');
+      M(236, 196, 168, 50, '#c9c1aa', 'plastic');
       break;
     case 'amp':
-      B(130, 40, 380, 270, '#c9c4b4', '#4f4a42'); R(136, 46, 368, 4, '#e2ddce'); B(140, 220, 360, 80, '#b5af9e', '#4f4a42');
-      B(8, 50, 108, 120, '#5a3920', '#2b1a0e'); B(524, 50, 108, 120, '#5a3920', '#2b1a0e');
+      S(130, 40, 380, 270); S(8, 50, 108, 120); S(524, 50, 108, 120);
+      M(130, 40, 380, 270, '#c9c4b4', 'metal'); M(140, 220, 360, 80, '#d6d2c6', 'metal');
+      M(8, 50, 108, 120, '#5a3920', 'wood'); M(524, 50, 108, 120, '#5a3920', 'wood');
       break;
     case 'turntable':
-      B(100, 30, 420, 320, '#6b4529', '#2b1a0e'); R(106, 36, 408, 4, '#8a5a36'); B(456, 290, 120, 50, '#5a3920', '#2b1a0e');
-      B(512, 60, 116, 120, '#5a3920', '#2b1a0e');
+      S(100, 30, 420, 320); S(512, 60, 116, 120);
+      M(100, 30, 420, 320, '#6b4529', 'wood'); M(456, 290, 120, 50, '#2a2a2a', 'metal');
+      M(512, 60, 116, 120, '#5a3920', 'wood');
       break;
     case 'sewing':
-      B(20, 290, 600, 30, '#6b4529', '#2b1a0e');
-      B(170, 160, 320, 130, '#2a2a2a', '#000'); B(170, 60, 70, 110, '#2a2a2a', '#000'); B(170, 40, 300, 60, '#2a2a2a', '#000'); B(430, 60, 60, 120, '#2a2a2a', '#000');
+      S(20, 290, 600, 30);
+      M(20, 290, 600, 30, '#6b4529', 'wood');
+      M(170, 160, 320, 130, '#2a2a2a', 'enamel'); M(170, 60, 70, 110, '#2a2a2a', 'enamel'); M(170, 40, 300, 60, '#2a2a2a', 'enamel'); M(430, 60, 60, 120, '#2a2a2a', 'enamel');
       R(180, 50, 280, 3, '#c9a65a'); R(180, 170, 300, 3, '#c9a65a');
+      for (let i = 0; i < 6; i++) { R(250 + i * 30, 62, 10, 4, '#c9a65a'); R(255 + i * 30, 70, 4, 10, '#a8843a'); }
       break;
     case 'tv':
-      B(80, 20, 520, 320, '#6b4529', '#2b1a0e'); R(86, 26, 508, 4, '#8a5a36'); B(500, 40, 90, 290, '#5a3920', '#2b1a0e');
-      for (let i = 0; i < 6; i++) R(510, 130 + i * 6, 70, 2, '#3f2714');
+      S(80, 20, 520, 320);
       R(150, 338, 12, 30, '#2a2a2a'); R(480, 338, 12, 30, '#2a2a2a');
+      M(80, 20, 520, 320, '#6b4529', 'wood'); M(500, 40, 90, 290, '#5a3920', 'wood');
+      G(510, 128, 70, 40, '#9a8058');
       break;
     case 'calc':
-      B(180, 30, 280, 320, '#3a3a36', '#000'); R(186, 36, 268, 4, '#55554f');
-      B(40, 120, 140, 84, '#2a2a28', '#000');
+      S(180, 30, 280, 320); S(40, 120, 140, 84);
+      M(180, 30, 280, 320, '#3a3a36', 'plastic'); M(40, 120, 140, 84, '#2a2a28', 'plastic');
+      R(196, 300, 60, 6, '#c9a24a');
       break;
     case 'clock':
-      B(212, 30, 216, 338, '#6b4529', '#2b1a0e'); B(226, 40, 188, 318, '#5a3920', '#3f2714'); B(262, 214, 116, 140, 'rgba(200,230,230,0.08)', C.brass);
+      S(212, 30, 216, 338);
+      M(212, 30, 216, 338, '#6b4529', 'wood'); M(226, 40, 188, 318, '#5a3920', 'wood');
+      p.box(mx(262), my(214), 116 * K, 140 * K, 'rgba(200,230,230,0.08)', C.brass);
+      for (let i = 0; i < 10; i++) R(270 + i * 2, 220 + i * 8, 2, 30, 'rgba(255,255,255,0.08)');
       break;
   }
+}
+
+/** 덮개를 연 뒤 보이는 안쪽 섀시 판 */
+function interior(p: Painter, def: ItemDef) {
+  if (def.id === 'clock') return;
+  const [x, y, w, h] = def.cover;
+  const b = BODY[def.id] ?? { color: '#5a4636', mat: 'metal' };
+  const base = darken(b.color, b.color === '#2a2a2a' || b.color === '#1c1c1c' || b.color === '#262626' ? 0 : 0.45);
+  const X = mx(x), Y = my(y), Wd = w * K, Hd = h * K;
+  p.round(X, Y, Wd, Hd, '#0c0806', 2);
+  p.rect(X + 1, Y + 1, Wd - 2, Hd - 2, base === '#2a2a2a' ? '#3a3a3a' : base);
+  // 섀시 금속판 구멍과 안쪽 그림자
+  for (let yy = Y + 8; yy < Y + Hd - 6; yy += 12) for (let xx = X + 8 + ((yy / 12) % 2) * 6; xx < X + Wd - 6; xx += 12) p.rect(xx, yy, 2, 2, darken(base, 0.35));
+  p.rect(X + 1, Y + 1, Wd - 2, 3, 'rgba(0,0,0,0.35)'); p.rect(X + 1, Y + 1, 3, Hd - 2, 'rgba(0,0,0,0.25)');
 }
 
 function drawCover(p: Painter, def: ItemDef, job: Job, t: number) {
@@ -302,10 +339,10 @@ function drawCover(p: Painter, def: ItemDef, job: Job, t: number) {
       p.disc(cx, cy, r.h / 2 - 3, '#efe6cc'); p.ring(cx, cy, r.h / 2 - 3, C.brass, 2);
       for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; p.rect(cx + Math.cos(a) * (r.h / 2 - 9) - 1, cy + Math.sin(a) * (r.h / 2 - 9) - 1, 3, 3, '#2b2a26'); }
     } else {
-      p.box(r.x, r.y, r.w, r.h, '#47392d', '#1c140e');
-      p.rect(r.x + 2, r.y + 2, r.w - 4, 1, '#5e4c3c');
-      for (const [sx, sy] of [[r.x + 5, r.y + 5], [r.x + r.w - 7, r.y + 5], [r.x + 5, r.y + r.h - 7], [r.x + r.w - 7, r.y + r.h - 7]]) { p.disc(sx + 1, sy + 1, 2, '#b9b9b9'); p.rect(sx, sy + 1, 3, 1, '#555'); }
-      p.label(`${def.coverLabel} (드라이버로 열기)`, r.x + r.w / 2, r.y + r.h / 2 - 6, 9, '#d8c6a4');
+      coverPlate(p, r.x, r.y, r.w, r.h, def.id);
+      const lw = p.measure(`${def.coverLabel} · 드라이버로 열기`, 9, 700) + 14;
+      p.round(r.x + r.w / 2 - lw / 2, r.y + r.h / 2 - 8, lw, 16, 'rgba(12,8,6,0.75)', 2);
+      p.label(`${def.coverLabel} · 드라이버로 열기`, r.x + r.w / 2, r.y + r.h / 2 - 6, 9, '#f0e2c0');
     }
     sparkle(p, r.x + r.w - 10, r.y + 8, t, 3);
     region({ id: 'cover', ...r, click: () => { if (ui.tool !== 'driver') { ui.tool = 'driver'; } openCover(1); } });
@@ -313,8 +350,11 @@ function drawCover(p: Painter, def: ItemDef, job: Job, t: number) {
   if (def.chassis && job.open === 1) {
     const [x, y, w, h] = def.chassis;
     const r = { x: mx(x), y: my(y), w: w * K, h: h * K };
-    p.box(r.x, r.y, r.w, r.h, '#6b6f72', '#2d3033');
-    p.label(`${def.chassisLabel} (드라이버로 빼기)`, r.x + r.w / 2, r.y + r.h / 2 - 6, 9, C.cream);
+    body(p, r.x, r.y, r.w, r.h, '#7a8085', 'metal');
+    for (const [sx, sy] of [[r.x + 6, r.y + r.h / 2], [r.x + r.w - 7, r.y + r.h / 2]]) screwHead(p, sx, sy, 3, 0.7);
+    const lw = p.measure(`${def.chassisLabel} · 드라이버로 빼기`, 9, 700) + 14;
+    p.round(r.x + r.w / 2 - lw / 2, r.y + r.h / 2 - 8, lw, 16, 'rgba(12,8,6,0.75)', 2);
+    p.label(`${def.chassisLabel} · 드라이버로 빼기`, r.x + r.w / 2, r.y + r.h / 2 - 6, 9, '#f0e2c0');
     sparkle(p, r.x + r.w - 10, r.y + 6, t, 5);
     region({ id: 'chassis', ...r, click: () => { if (ui.tool !== 'driver') ui.tool = 'driver'; openCover(2); } });
   }
@@ -332,14 +372,18 @@ function openCover(level: number) {
   const which = closing ? job.open : level;
   const n = which === 2 ? 4 : SCREWS[def.id] ?? 4;
   const name = which === 2 ? def.chassisLabel! : def.coverLabel;
+  setMiniItem(def.id);
   startScrews(def.comps[0], n, closing ? `${name} 다시 조이기` : `${name} 열기`, apply, closing, () => {});
 }
 
 function drawWires(p: Painter, def: ItemDef, job: Job, layerFilter: (l: number) => boolean) {
   for (const w of def.wires) {
     if (!visible(job, w.layer) || !layerFilter(w.layer)) continue;
-    const color = w.kind === 's' ? '#e2c25c' : w.kind === 'm' ? '#9aa3a8' : '#b04a32';
-    for (let i = 1; i < w.pts.length; i++) p.line(mx(w.pts[i - 1][0]), my(w.pts[i - 1][1]), mx(w.pts[i][0]), my(w.pts[i][1]), color, w.kind === 'm' ? 2 : 1);
+    const color = w.kind === 's' ? '#e2c25c' : w.kind === 'm' ? '#9aa3a8' : '#c8553a';
+    const seg = (i: number, c: string, wd: number, dy = 0) => p.line(mx(w.pts[i - 1][0]), my(w.pts[i - 1][1]) + dy, mx(w.pts[i][0]), my(w.pts[i][1]) + dy, c, wd);
+    for (let i = 1; i < w.pts.length; i++) seg(i, 'rgba(0,0,0,0.35)', 2, 2);
+    for (let i = 1; i < w.pts.length; i++) seg(i, darken(color, 0.45), w.kind === 'm' ? 3 : 2);
+    for (let i = 1; i < w.pts.length; i++) seg(i, color, 1);
   }
 }
 
@@ -714,6 +758,7 @@ function startAccuse(a: Action) {
   if (blocked) { toast(blocked.text, true); ui.overlay = null; return; }
   const comp = compOf(item(job.itemId), ov.comp)!;
   ui.overlay = null;
+  setMiniItem(job.itemId);
   startRepairMini(comp, a, redo => {
     ui.overlay = { kind: 'accuse', comp: comp.id };
     state.minute = Math.min(600, state.minute + redo);

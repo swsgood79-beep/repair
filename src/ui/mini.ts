@@ -3,6 +3,12 @@ import { C, Painter } from '../gfx/painter';
 import { drawPart } from '../gfx/parts';
 import { setLoop, sfx, type Sfx } from '../audio';
 import { button, region, ui } from './core';
+import { coverPlate, pcb, screwHead, thermometer, tool, TIP } from '../gfx/props';
+import { benchMat, woodStrip } from './backdrops';
+
+/** 지금 고치는 물건 (덮개 색 등) */
+let theme = '';
+export function setMiniItem(id: string) { theme = id; }
 
 /**
  * 수리 손맛: 실제 작업 순서를 단계별 미니게임으로 진행한다.
@@ -131,14 +137,24 @@ export function drawMini(p: Painter, t: number) {
   region({ id: 'mini-block', x: 0, y: 0, w: 640, h: 360 });
   p.rect(0, 0, 640, 360, 'rgba(6,10,8,0.7)');
   p.clearText(0, 0, 640, 360);
-  p.box(A.x, A.y, A.w, A.h, '#1f2e27', C.ink);
-  for (let x = A.x + 12; x < A.x + A.w; x += 20) p.rect(x, A.y + 1, 1, A.h - 2, '#24362e');
-  for (let y = A.y + 12; y < A.y + A.h; y += 20) p.rect(A.x + 1, y, A.w - 2, 1, '#24362e');
-  for (let i = 6; i > 0; i--) p.disc(CX, CY + 10, 60 + i * 26, 'rgba(255,214,140,0.03)');
+  p.round(A.x - 1, A.y - 1, A.w + 2, A.h + 2, C.ink, 2);
+  p.g.save(); p.g.beginPath(); p.g.rect(A.x, A.y, A.w, A.h); p.g.clip();
+  benchMat(p, A.x, A.y, A.w, A.h);
+  const lamp = p.g.createRadialGradient(CX, CY, 20, CX, CY, 340);
+  lamp.addColorStop(0, 'rgba(255,220,150,0.22)'); lamp.addColorStop(0.6, 'rgba(255,220,150,0.05)'); lamp.addColorStop(1, 'rgba(0,0,0,0.35)');
+  p.g.fillStyle = lamp; p.g.fillRect(A.x, A.y, A.w, A.h);
+  p.g.restore();
   // 제목과 단계 표시
-  p.rect(A.x + 1, A.y + 1, A.w - 2, 24, '#16201c');
+  p.g.save(); p.g.beginPath(); p.g.rect(A.x, A.y, A.w, 25); p.g.clip(); woodStrip(p, A.y - 2, 28); p.g.restore();
+  p.rect(A.x, A.y + 25, A.w, 1, '#140d08');
+  p.text(m.title, A.x + 11, A.y + 6, 12, '#140d08', 'left', 700);
   p.text(m.title, A.x + 10, A.y + 5, 12, C.gold, 'left', 700);
-  m.steps.forEach((_, i) => p.disc(A.x + A.w - 90 + i * 12, A.y + 12, 4, i < m.i ? C.ok : i === m.i ? C.gold : '#3a4a40'));
+  m.steps.forEach((_, i) => {
+    const sx = A.x + A.w - 90 + i * 12, sy = A.y + 12;
+    p.disc(sx, sy, 5, '#140d08');
+    p.disc(sx, sy, 4, i < m.i ? C.ok : i === m.i ? C.gold : '#5a4330');
+    p.rect(sx - 2, sy - 2, 2, 1, 'rgba(255,255,255,0.5)');
+  });
   if (m.doneT) {
     const age = t - m.doneT;
     if (!m.d.chimed) { m.d.chimed = true; sfx('chime'); setLoop('sizzle', 0); setLoop('spray', 0); }
@@ -192,16 +208,13 @@ function arrowRing(p: Painter, cx: number, cy: number, r: number, dir: number, t
   p.disc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 3, C.gold);
 }
 
-function driverAt(p: Painter, x: number, y: number) {
-  p.rect(x - 1, y - 18, 3, 18, C.steel); p.rect(x - 1, y - 18, 1, 18, '#c9d1d4');
-  p.box(x - 4, y - 34, 9, 17, C.red); p.rect(x - 3, y - 33, 2, 15, '#f08a6a');
-}
+function driverAt(p: Painter, x: number, y: number) { tool(p, 'driver', x, y, TIP.driver, 2); }
 function ironAt(p: Painter, x: number, y: number, hot: boolean) {
-  for (let i = 0; i < 16; i++) p.rect(x + i, y - i, 2, 2, hot ? (i < 4 ? '#ff9a3a' : C.steel) : C.steel);
-  p.box(x + 14, y - 30, 8, 16, '#3a2a1c'); p.rect(x + 16, y - 46, 4, 18, '#2a2a2a');
+  tool(p, hot ? 'ironHot' : 'iron', x, y, TIP.iron, 2);
+  if (hot) { const k = (ui.now * 3) % 1; p.rect(x + 2 - k * 3, y - 6 - k * 14, 2, 2, `rgba(220,220,220,${0.5 - k * 0.5})`); }
 }
-function pliersAt(p: Painter, x: number, y: number) { p.line(x, y, x + 18, y - 26, '#c9c9c9', 2); p.line(x + 4, y, x + 22, y - 22, '#c9c9c9', 2); p.box(x + 16, y - 40, 6, 16, C.red); p.box(x + 24, y - 36, 6, 16, C.red); }
-function brushAt(p: Painter, x: number, y: number) { p.box(x - 8, y - 6, 16, 6, '#7a5537'); for (let i = 0; i < 7; i++) p.rect(x - 7 + i * 2, y, 1, 4, '#e8e0c4'); p.rect(x - 2, y - 22, 4, 16, '#946a46'); }
+function pliersAt(p: Painter, x: number, y: number) { tool(p, 'pliers', x, y, TIP.pliers, 2); }
+function brushAt(p: Painter, x: number, y: number) { tool(p, 'brush', x, y, TIP.brush, 2); }
 
 /* ---------- 단계별 미니게임 ---------- */
 const STEP_DRAW: Record<StepKind, Drawer> = {
@@ -264,7 +277,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     p.rect(cut, y - 3, CX + 220 - cut, 6, '#d98a4d');
     for (let i = cut; i < CX + 220; i += 6) p.rect(i, y - 3, 1, 6, '#b8662e');
     // 스트리퍼
-    p.box(cut - 8, y - 30, 16, 26, C.red); p.box(cut - 8, y + 4, 16, 26, C.red); p.rect(cut - 2, y - 6, 4, 12, C.steel);
+    tool(p, 'stripper', cut, y, TIP.stripper);
     let start = 0;
     region({
       id: 'mini-focus', x: cut - 20, y: y - 40, w: 40, h: 80,
@@ -281,8 +294,8 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     const d = m.d;
     drawPart(p, m.comp, { x: CX - 70, y: CY - 50, w: 140, h: 100 }, {}, ctx0, 0);
     const can = { x: CX + 150, y: CY - 60, w: 40, h: 90 };
-    p.box(can.x, can.y, can.w, can.h, '#2c7a73'); p.rect(can.x + 6, can.y + 30, 28, 20, C.cream); p.text('세정제', can.x + 20, can.y + 34, 8, C.ink, 'center', 700);
-    p.box(can.x + 12, can.y - 12, 16, 12, '#c9c9c9');
+    tool(p, 'spray', can.x + 6 + 21, can.y - 8 + 7 + (d.holding ? 2 : 0), TIP.spray);
+    p.text('세정제', can.x + 21, can.y + 30, 8, '#c0392b', 'center', 700);
     if (d.holding) {
       d.amount = Math.min(1, d.amount + 0.02);
       loop.spray = 1;
@@ -319,7 +332,7 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     for (const px of d.puddles) p.rect(px - 6, CY + 52, 12, 3, '#d9a443');
     const [mx] = ui.mouse;
     const dx = Math.max(CX - 160, Math.min(CX + 160, mx));
-    p.box(dx - 6, CY - 90, 12, 30, '#d9a443'); p.rect(dx - 1, CY - 60, 2, 10, C.steel);
+    tool(p, 'oiler', dx, CY - 52, TIP.oiler, 2);
     if (d.falling) {
       const age = t - d.falling.t0;
       const y = CY - 50 + age * 160;
@@ -394,8 +407,8 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
     const swing = Math.max(0, d.swing - t);
     const ang = swing > 0 ? -0.9 * (swing / 0.15) : -0.9;
     const hx = CX + 30, hy = CY - 50;
-    p.line(hx + 40, hy + 40, hx + Math.cos(ang) * 10, hy + Math.sin(ang) * 10 + 30, '#7a5537', 4);
-    p.box(CX - 2, CY - 6 - pinH - (swing > 0 ? 0 : 14), 30, 14, '#5d686d');
+    void hx; void hy; void ang;
+    tool(p, 'hammer', CX + 1, CY + 10 - pinH - (swing > 0 ? 0 : 16), TIP.hammer, 2);
     p.label(`톡톡 ${d.taps}/4`, CX, CY + 70, 12, C.gold);
     region({ id: 'mini-focus', x: CX - 90, y: CY - 90, w: 180, h: 160, down: () => { d.taps++; d.swing = ui.now + 0.15; sfx('hammer'); if (d.taps >= 4) { say('핀이 꽉 박혔다'); next(); } } });
   },
@@ -466,8 +479,9 @@ const STEP_DRAW: Record<StepKind, Drawer> = {
 const ctx0 = { power: false, sw: 0, knobA: 0.3, knobB: 0.5, wiggle: null, warm: false, nudge: false, moved: false };
 
 function socketBase(p: Painter, m: Mini) {
-  p.box(CX - 110, CY + 20, 220, 40, '#2f5b3c', '#1b3523');
-  for (let i = 0; i < 9; i++) p.disc(CX - 96 + i * 24, CY + 40, 3, '#d0d4d8');
+  p.round(CX - 106, CY + 24, 220, 40, 'rgba(0,0,0,0.35)', 2);
+  pcb(p, CX - 110, CY + 20, 220, 40);
+  for (let i = 0; i < 9; i++) { p.disc(CX - 96 + i * 24, CY + 40, 3, '#c9a24a'); p.rect(CX - 96 + i * 24, CY + 40, 1, 1, '#1a1a1a'); }
   void m;
 }
 
@@ -489,21 +503,20 @@ function twist(p: Painter, t: number, m: Mini, s: Step, dir: number) {
 /** 덮개 나사: dir -1 풀기, +1 조이기 */
 function screws(p: Painter, t: number, m: Mini, dir: number) {
   const d = m.d;
-    p.box(CX - 170, CY - 84, 340, 168, '#47392d', '#1c140e');
-    p.rect(CX - 168, CY - 82, 336, 2, '#5e4c3c');
-    p.label('덮개', CX, CY - 8, 12, '#d8c6a4');
-    // 나사 접시
-    p.disc(CX + 250, CY - 10, 34, '#8d9297'); p.disc(CX + 250, CY - 10, 28, '#a9b0b4');
+    p.round(CX - 166, CY - 78, 340, 168, 'rgba(0,0,0,0.35)', 3);
+    coverPlate(p, CX - 170, CY - 84, 340, 168, theme, false);
+    // 나사 접시 (자석 받침)
+    p.disc(CX + 252, CY - 7, 35, 'rgba(0,0,0,0.35)');
+    p.disc(CX + 250, CY - 10, 35, '#2a2d30'); p.disc(CX + 250, CY - 10, 34, '#8d9297'); p.disc(CX + 250, CY - 10, 28, '#6d777c'); p.disc(CX + 248, CY - 12, 26, '#a9b0b4');
+    p.label('나사 접시', CX + 250, CY + 28, 9, C.cream);
     let outN = 0;
     d.screws.forEach((sc: any, i: number) => {
-      if (sc.out && dir > 0) { p.disc(sc.x, sc.y, 12, '#c9cfd3'); p.ring(sc.x, sc.y, 12, '#5b6064'); p.line(sc.x - 8, sc.y, sc.x + 8, sc.y, '#3a3e41', 2); p.line(sc.x, sc.y - 8, sc.x, sc.y + 8, '#3a3e41', 2); p.label('✓', sc.x, sc.y - 26, 10, C.ok); return; }
-      if (sc.out) { outN++; const tx = CX + 236 + (outN % 3) * 12, ty = CY - 18 + Math.floor(outN / 3) * 10; p.disc(tx, ty, 5, '#d0d4d8'); p.rect(tx - 3, ty, 6, 1, '#555'); return; }
-      const lift = (dir < 0 ? sc.p : 1 - sc.p) * 6;
-      p.disc(sc.x + 2, sc.y + 2 + lift / 2, 13, 'rgba(0,0,0,0.4)');
-      p.disc(sc.x, sc.y - lift, 12, '#c9cfd3'); p.ring(sc.x, sc.y - lift, 12, '#5b6064');
-      const a = sc.rot;
-      p.line(sc.x - Math.cos(a) * 8, sc.y - lift - Math.sin(a) * 8, sc.x + Math.cos(a) * 8, sc.y - lift + Math.sin(a) * 8, '#3a3e41', 2);
-      p.line(sc.x - Math.cos(a + 1.57) * 8, sc.y - lift - Math.sin(a + 1.57) * 8, sc.x + Math.cos(a + 1.57) * 8, sc.y - lift + Math.sin(a + 1.57) * 8, '#3a3e41', 2);
+      // 나사 구멍
+      p.disc(sc.x, sc.y, 14, 'rgba(0,0,0,0.35)'); p.ring(sc.x, sc.y, 14, 'rgba(255,255,255,0.12)');
+      if (sc.out && dir > 0) { screwHead(p, sc.x, sc.y, 12, 0.7); p.label('✓', sc.x, sc.y - 28, 10, C.ok); return; }
+      if (sc.out) { outN++; const tx = CX + 236 + (outN % 3) * 13, ty = CY - 18 + Math.floor(outN / 3) * 12; screwHead(p, tx, ty, 5, outN); return; }
+      const lift = (dir < 0 ? sc.p : 1 - sc.p) * 8;
+      screwHead(p, sc.x, sc.y, 12, sc.rot, lift);
       if (sc.p > 0) { p.rect(sc.x - 14, sc.y + 16, 28, 4, '#3a4a40'); p.rect(sc.x - 14, sc.y + 16, 28 * sc.p, 4, C.gold); }
       arrowRing(p, sc.x, sc.y, 30, dir, t);
       rotary(i === d.screws.findIndex((s2: any) => !s2.out) ? 'mini-focus' : 'mini-screw' + i, sc.x, sc.y, 34, dir, dir < 0 ? 1.5 : 1, () => sc.p, v => { sc.rot += (v - sc.p) * 9 * dir; sc.p = v; }, () => {
@@ -518,8 +531,8 @@ function screws(p: Painter, t: number, m: Mini, dir: number) {
 /** 기판 위 다리 두 개: 납 빼기 / 납땜 */
 function board(p: Painter, t: number, m: Mini, s: Step, desolder: boolean) {
   const d = m.d;
-  p.box(CX - 170, CY - 10, 340, 84, '#2f5b3c', '#1b3523');
-  for (let i = 0; i < 6; i++) p.rect(CX - 160 + i * 56, CY + 62, 30, 3, '#c9a24a');
+  p.round(CX - 166, CY - 4, 340, 84, 'rgba(0,0,0,0.35)', 3);
+  pcb(p, CX - 170, CY - 10, 340, 84);
   const legX = [CX - 50, CX + 50];
   const bodyR = { x: CX - 70, y: CY - 92, w: 140, h: 72 };
   drawPart(p, m.comp, bodyR, {}, ctx0, 0);
@@ -544,10 +557,8 @@ function board(p: Painter, t: number, m: Mini, s: Step, desolder: boolean) {
   const lx = legX[s.leg ?? 0];
   // 온도 막대
   const gx = CX + 190, gy = CY - 84;
-  p.box(gx, gy, 16, 130, '#2a2a2a');
-  p.rect(gx + 2, gy + 2 + 128 * (1 - 1.0), 12, 128 * 0.45, 'rgba(127,191,106,0.35)');
-  p.rect(gx + 2, gy + 128 - 128 * Math.min(1.2, d.heat) / 1.2, 12, 128 * Math.min(1.2, d.heat) / 1.2, d.heat > 1 ? C.red : d.heat > 0.55 ? C.ok : C.warn);
-  p.label('온도', gx + 8, gy + 134, 9, C.cream);
+  thermometer(p, gx, gy, 112, d.heat, 0.46, 0.83);
+  p.label('온도', gx + 8, gy + 140, 9, C.cream);
   if (d.phase === 'heat') {
     if (d.holding) {
       d.heat = Math.min(1.25, d.heat + 0.012);

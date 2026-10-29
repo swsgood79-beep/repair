@@ -14,12 +14,15 @@ export function drawPart(p: Painter, c: Comp, r: { x: number; y: number; w: numb
 
 function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number, cx: number, cy: number, glow: number, fx: FX, ctx: Ctx, t: number, id: string) {
   switch (s) {
-    case 'plug':
-      p.box(x, y + 3, w - 6, h - 6, '#2c241e');
-      p.rect(x + 2, y + 5, w - 10, 2, '#4a3e33');
-      p.rect(x + w - 7, y + 6, 7, 2, C.steel); p.rect(x + w - 7, y + h - 8, 7, 2, C.steel);
+    case 'plug': {
+      p.round(x, y + 3, w - 6, h - 6, '#120c08', 2);
+      p.rect(x + 1, y + 4, w - 8, h - 8, '#2c241e');
+      p.rect(x + 2, y + 5, w - 10, 2, '#4a3e33'); p.rect(x + 2, y + h - 6, w - 10, 1, '#1a1410');
+      for (let i = 0; i < 3; i++) p.rect(x + 4 + i * 4, y + 8, 2, h - 16, '#3a3029');
+      for (const py of [y + 6, y + h - 8]) { p.rect(x + w - 7, py, 7, 2, C.steel); p.rect(x + w - 7, py, 7, 1, '#d0d8dc'); }
       if (ctx.power) p.rect(x + w - 2, y + 4, 3, h - 8, C.ok);
       break;
+    }
     case 'cord': {
       for (let i = 0; i <= w; i++) {
         const yy = cy + Math.sin((i / w) * Math.PI * 3) * (h / 3);
@@ -29,10 +32,13 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       break;
     }
     case 'switch': {
-      p.box(x, y, w, h, '#2a221c');
+      p.round(x, y, w, h, '#120c08', 2);
+      p.rect(x + 1, y + 1, w - 2, h - 2, '#2a221c'); p.rect(x + 1, y + 1, w - 2, 1, '#4a3e33');
       const on = ctx.sw > 0;
-      p.box(cx - 5, y + 3, 10, h - 6, '#3d332b');
-      p.rect(cx - 3, on ? y + 4 : cy, 6, h / 2 - 4, on ? C.glow : C.paper2);
+      p.box(cx - 5, y + 3, 10, h - 6, '#1a1410');
+      const ty = on ? y + 4 : cy;
+      p.rect(cx - 4, ty, 8, h / 2 - 4, on ? C.glow : C.paper2);
+      p.rect(cx - 4, ty, 8, 1, on ? '#fff3c4' : '#efe6cc'); p.rect(cx - 4, ty + h / 2 - 5, 8, 1, on ? '#c79a45' : '#9a8f6e');
       break;
     }
     case 'keys': {
@@ -47,20 +53,33 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
     }
     case 'fuse':
       p.box(x, y, w, h, 'rgba(200,230,235,0.35)', '#9fb5ba');
-      p.rect(x, y, 5, h, C.steel); p.rect(x + w - 5, y, 5, h, C.steel);
-      p.rect(x + 5, Math.round(cy), w - 10, 1, '#5a5a5a');
+      p.rect(x + 5, y + 2, w - 10, 1, 'rgba(255,255,255,0.6)');
+      for (const ex of [x, x + w - 6]) { p.rect(ex, y - 1, 6, h + 2, '#9aa2a8'); p.rect(ex, y - 1, 6, 1, '#e0e6e8'); p.rect(ex + 1, y, 1, h, '#d0d8dc'); p.rect(ex, y + h, 6, 1, '#5d686d'); }
+      p.rect(x + 6, Math.round(cy), w - 12, 1, '#5a5a5a');
       break;
-    case 'xfmr':
-      p.box(x, y, w, h, '#4a4f53');
-      for (let i = 1; i < 5; i++) p.rect(x + 2, y + (i * h) / 5, w - 4, 1, '#3a3e41');
-      p.box(x + w * 0.3, y + 3, w * 0.4, h - 6, '#b8662e', '#6e3510');
-      p.rect(x + w * 0.3 + 1, y + 4, w * 0.4 - 2, 1, '#d98a4d');
+    case 'xfmr': {
+      p.round(x, y, w, h, '#1c1f21', 1);
+      p.rect(x + 1, y + 1, w - 2, h - 2, '#4a4f53');
+      for (let i = 1; i < h / 3; i++) p.rect(x + 2, y + i * 3, w - 4, 1, i % 2 ? '#3a3e41' : '#555a5e');
+      p.rect(x + 1, y + 1, w - 2, 1, '#6d7478');
+      const cw = w * 0.42, cx0 = x + (w - cw) / 2;
+      p.round(cx0, y + 3, cw, h - 6, '#4a2208', 2);
+      p.rect(cx0 + 1, y + 4, cw - 2, h - 8, '#b8662e');
+      for (let i = 0; i < (h - 8) / 2; i++) p.rect(cx0 + 1, y + 4 + i * 2, cw - 2, 1, i % 2 ? '#c97a40' : '#a85a26');
+      p.rect(cx0 + 2, y + 4, 2, h - 8, '#e09a60'); p.rect(cx0 + cw - 3, y + 4, 1, h - 8, '#6e3510');
+      for (const bx of [x + 3, x + w - 6]) for (const by of [y + 3, y + h - 6]) p.rect(bx, by, 3, 3, '#9aa2a8');
       break;
-    case 'cap':
-      p.box(x, y + 3, w, h - 3, '#9aa2a8', '#3f4448');
-      p.rect(x + 1, y + 1, w - 2, 4, '#c3c9cd');
-      p.rect(x + 3, y + 7, 3, h - 11, '#50565a');
+    }
+    case 'cap': {
+      p.round(x, y + 2, w, h - 2, '#1c1f21', 2);
+      p.rect(x + 1, y + 3, w - 2, h - 4, '#2f5a8a');
+      p.rect(x + 2, y + 3, Math.max(1, w * 0.22), h - 4, '#4f7aa8'); p.rect(x + w - 3, y + 3, 1, h - 4, '#1f3a5a');
+      p.rect(x + w * 0.62, y + 5, Math.max(2, w * 0.18), h - 8, '#c9d0d4');
+      for (let i = 0; i < 3; i++) p.rect(x + w * 0.62, y + 8 + i * (h - 14) / 2, Math.max(2, w * 0.18), 1, '#2f5a8a');
+      p.rect(x + 1, y + 1, w - 2, 4, '#b9c1c6'); p.rect(x + 2, y + 1, w - 4, 1, '#eef2f4');
+      p.rect(cx - 2, y + 2, 4, 1, '#6d777c'); p.rect(cx - 0.5, y + 1, 1, 3, '#6d777c');
       break;
+    }
     case 'tube': {
       p.box(x, y + 6, w, h - 10, 'rgba(210,235,240,0.25)', '#a9c0c4');
       p.rect(x + 3, y + 2, w - 6, 5, 'rgba(210,235,240,0.25)');
@@ -75,19 +94,29 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       p.box(x - 1, y + h - 5, w + 2, 5, '#2a221c');
       break;
     }
-    case 'pot':
-      p.disc(cx, cy - 2, Math.min(w, h) / 2 - 3, '#9aa2a8');
-      p.ring(cx, cy - 2, Math.min(w, h) / 2 - 3, '#3f4448');
-      p.disc(cx, cy - 2, 3, C.cream);
+    case 'pot': {
+      const r = Math.min(w, h) / 2 - 3;
       for (let i = 0; i < 3; i++) p.rect(x + 5 + i * (w - 12) / 2, y + h - 4, 2, 4, C.steel);
+      p.disc(cx + 1, cy - 1, r + 1, 'rgba(0,0,0,0.35)');
+      p.disc(cx, cy - 2, r + 1, '#2a2d30');
+      p.disc(cx, cy - 2, r, '#8d9297');
+      for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; p.rect(cx + Math.cos(a) * r - 1, cy - 2 + Math.sin(a) * r - 1, 2, 2, i % 2 ? '#6d777c' : '#b9c1c6'); }
+      p.disc(cx, cy - 2, r * 0.7, '#c9d0d4'); p.disc(cx - r * 0.2, cy - 2 - r * 0.2, r * 0.3, '#eef2f4');
+      const a = -2.2 + (ctx.knobB ?? 0.5) * 4.4;
+      p.line(cx, cy - 2, cx + Math.cos(a) * r * 0.6, cy - 2 + Math.sin(a) * r * 0.6, '#2a2d30', 2);
       break;
+    }
     case 'speaker': {
       const r = Math.min(w, h) / 2 - 1;
       const v = (fx.tone ?? 0) > 0.05 || (fx.noise ?? 0) > 0.05 || (fx.hum ?? 0) > 0.3 ? Math.round(Math.sin(t * 50)) : 0;
-      p.disc(cx, cy, r, '#3a3027');
-      p.disc(cx, cy, r - 2 + v * 0.5, '#8e7a5c');
-      p.ring(cx, cy, r * 0.62, '#6b5a42');
-      p.disc(cx, cy, r * 0.24, '#3a3027');
+      p.disc(cx, cy, r, '#2a2219');
+      p.disc(cx, cy, r - 2, '#3a3027');
+      for (let i = 0; i < 6; i++) p.ring(cx, cy, r - 3 - i * (r * 0.1), i % 2 ? '#7a6649' : '#8e7a5c');
+      p.disc(cx, cy, r * 0.62 + v * 0.5, '#8e7a5c');
+      for (let i = 0; i < 5; i++) p.ring(cx, cy, r * 0.62 - i * r * 0.07 + v * 0.5, i % 2 ? '#a08a68' : '#7a6649');
+      p.disc(cx, cy, r * 0.24, '#2a2219'); p.disc(cx - r * 0.06, cy - r * 0.06, r * 0.12, '#4a4036');
+      p.disc(cx - r * 0.35, cy - r * 0.35, Math.max(1, r * 0.08), 'rgba(255,255,255,0.18)');
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.78; p.disc(cx + Math.cos(a) * (r - 1), cy + Math.sin(a) * (r - 1), 1.5, '#9aa2a8'); }
       break;
     }
     case 'bulb': {
@@ -111,18 +140,28 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       for (const k of [0.2, 0.5, 0.8]) { p.disc(x + w * k, cy, 4, '#d0d4d8'); p.rect(x + w * k - 1, cy - 2, 2, 1, C.white); }
       break;
     case 'board': {
-      p.box(x, y, w, h, '#2f5b3c', '#1b3523');
+      p.round(x, y, w, h, '#0f2a18', 2);
+      p.rect(x + 1, y + 1, w - 2, h - 2, '#2f6a44'); p.rect(x + 2, y + 1, w - 4, 1, '#4f8a64');
+      for (let i = 0; i < 4; i++) p.rect(x + 4, y + 4 + i * (h - 8) / 3, w - 8, 1, '#3f8a58');
       const n = Math.floor(w / 18);
       for (let i = 0; i < n; i++) {
-        p.disc(x + 9 + i * 18, y + h * 0.32, 3, '#d0d4d8');
-        p.rect(x + 5 + i * 18, y + h * 0.55, 8, h * 0.3, '#1f1f1f');
+        const bx = x + 9 + i * 18;
+        if (i % 3 === 1) { p.round(bx - 4, y + h * 0.5, 9, h * 0.32, '#1a1a1a', 1); p.rect(bx - 3, y + h * 0.5 + 1, 2, 1, '#555'); }
+        else if (i % 3 === 2) { p.round(bx - 3, y + h * 0.52, 7, h * 0.26, '#c9a65a', 1); p.rect(bx - 2, y + h * 0.56, 5, 1, '#8a2a1e'); p.rect(bx - 2, y + h * 0.62, 5, 1, '#2a2a2a'); }
+        else { p.round(bx - 3, y + h * 0.48, 7, h * 0.36, '#2f5a8a', 2); p.rect(bx - 2, y + h * 0.48, 2, h * 0.36, '#4f7aa8'); }
+        p.disc(bx, y + h * 0.3, 3, '#c9a24a'); p.disc(bx - 0.5, y + h * 0.3 - 0.5, 1.5, '#dfe3e6');
       }
       break;
     }
     case 'motor': {
-      p.box(x, y, w, h, '#4b4f53');
-      p.disc(cx, cy, Math.min(w, h) * 0.34, '#b8662e');
-      p.ring(cx, cy, Math.min(w, h) * 0.34, '#6e3510');
+      p.round(x, y, w, h, '#1c1f21', 2);
+      p.rect(x + 1, y + 1, w - 2, h - 2, '#4b4f53');
+      for (let i = 2; i < h - 2; i += 3) p.rect(x + 2, y + i, 3, 1, '#3a3e41'), p.rect(x + w - 5, y + i, 3, 1, '#3a3e41');
+      p.rect(x + 2, y + 1, w - 4, 1, '#7a8085');
+      const rr = Math.min(w, h) * 0.34;
+      p.disc(cx, cy, rr + 1, '#4a2208'); p.disc(cx, cy, rr, '#b8662e');
+      for (let i = 1; i < 4; i++) p.ring(cx, cy, rr * (i / 4), i % 2 ? '#c97a40' : '#a85a26');
+      p.disc(cx - rr * 0.35, cy - rr * 0.35, Math.max(1, rr * 0.2), '#e09a60');
       const sp = (fx.spin ?? 0) || (fx.whirr ?? 0);
       const a = sp ? t * 30 * Math.max(0.3, sp) : 0;
       p.line(cx - Math.cos(a) * 6, cy - Math.sin(a) * 6, cx + Math.cos(a) * 6, cy + Math.sin(a) * 6, C.white, 2);
@@ -300,10 +339,12 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       for (let i = 0; i < 4; i++) p.rect(x + 6 + i * (w - 14) / 3, y + h, 2, 4, C.steel);
       break;
     case 'tr':
-      p.box(x, y, w, h * 0.45, '#9aa2a8', '#3f4448');
-      p.disc(cx, y + h * 0.2, 3, '#3f4448');
-      p.box(x + 4, y + h * 0.42, w - 8, h * 0.36, '#1f1f1f', '#000');
-      for (let i = 0; i < 3; i++) p.rect(x + 8 + i * (w - 18) / 2, y + h * 0.78, 2, h * 0.22, C.steel);
+      p.round(x, y, w, h * 0.45, '#2a2d30', 2);
+      p.rect(x + 1, y + 1, w - 2, h * 0.45 - 2, '#9aa2a8'); p.rect(x + 2, y + 1, w - 4, 1, '#d0d8dc');
+      for (let i = 0; i < 3; i++) p.rect(x + 3, y + 4 + i * 3, w - 6, 1, '#7a8085');
+      p.disc(cx, y + h * 0.2, 3, '#2a2d30'); p.disc(cx, y + h * 0.2, 2, '#c9d0d4');
+      p.round(x + 4, y + h * 0.42, w - 8, h * 0.36, '#000', 1); p.rect(x + 5, y + h * 0.42 + 1, w - 10, h * 0.36 - 2, '#1f1f1f'); p.rect(x + 6, y + h * 0.42 + 2, w * 0.3, 1, '#4a4a4a');
+      for (let i = 0; i < 3; i++) { p.rect(x + 8 + i * (w - 18) / 2, y + h * 0.78, 2, h * 0.22, C.steel); p.rect(x + 8 + i * (w - 18) / 2, y + h * 0.78, 1, h * 0.22, '#d0d8dc'); }
       break;
     case 'vu': {
       const v = fx.vu ?? [0, 0];
