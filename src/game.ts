@@ -12,7 +12,7 @@ export const SHOP_LEVELS = [
   { level: 1, name: '골목 수리점', price: 0, items: ['lamp', 'fan', 'radio', 'cassette', 'clock', 'iron', 'phone'], desc: '할아버지가 남긴 한 칸짜리 가게' },
   { level: 2, name: '작업대 넓히기', price: 150000, items: ['ricecooker', 'amp'], desc: '살림 가전과 오디오를 올릴 넓은 작업대' },
   { level: 3, name: '2층 공방', price: 300000, items: ['turntable', 'sewing'], desc: '기계 손질을 하는 조용한 2층 공방' },
-  { level: 4, name: '한결전파사 본점', price: 450000, items: ['tv', 'calc'], desc: '간판을 새로 달고 텔레비전과 전자기기까지 다루는 본점' },
+  { level: 4, name: '한결전파사 본점', price: 450000, items: ['tv', 'calc'], desc: '간판을 새로 달고 TV와 전자기기까지 다루는 본점' },
 ];
 /** 처음부터 고칠 수 있는 물건 */
 const STARTERS = () => Object.fromEntries(SHOP_LEVELS[0].items.map(id => [id, 1]));

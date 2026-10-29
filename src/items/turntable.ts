@@ -31,7 +31,7 @@ export const turntable: ItemDef = {
     { id: 'board', name: '앰프 기판', short: '앰프', shape: 'board', x: 150, y: 70, w: 150, h: 60, layer: 1, acts: ['solder'] },
   ],
   tps: [
-    { id: 'rpm', label: '회전수', x: 400, y: 300, layer: 0, kind: 'amp', unit: '회전', expect: 33 },
+    { id: 'rpm', label: '회전수', x: 400, y: 300, layer: 0, kind: 'amp', unit: 'rpm', expect: 33 },
     { id: 't1', label: '바늘 신호', x: 420, y: 200, layer: 1, kind: 'sig', unit: 'mV', expect: 5 },
     { id: 't2', label: '앰프 출력', x: 310, y: 140, layer: 1, kind: 'sig', unit: 'V', expect: 2 },
   ],

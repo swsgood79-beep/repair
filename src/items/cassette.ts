@@ -19,7 +19,7 @@ export const cassette: ItemDef = {
     { id: 'speaker', name: '스피커', short: '스피커', shape: 'speaker', x: 458, y: 72, w: 84, h: 84, layer: 0, acts: [], hand: 'volume' },
     { id: 'battery', name: '건전지함', short: '건전지', shape: 'battery', x: 112, y: 292, w: 150, h: 42, layer: 0, acts: ['clean'], hand: 'power' },
     { id: 'amp', name: '앰프 기판', short: '앰프', shape: 'board', x: 128, y: 186, w: 116, h: 62, layer: 1, acts: [] },
-    { id: 'motor', name: '직류 모터', short: '모터', shape: 'motor', x: 300, y: 196, w: 58, h: 58, layer: 1, ohm: 12, part: 4000, acts: ['replace'], hand: 'nudge' },
+    { id: 'motor', name: 'DC 모터', short: '모터', shape: 'motor', x: 300, y: 196, w: 58, h: 58, layer: 1, ohm: 12, part: 4000, acts: ['replace'], hand: 'nudge' },
     { id: 'belt', name: '고무 벨트', short: '벨트', shape: 'belt', x: 372, y: 190, w: 116, h: 74, layer: 1, part: 800, acts: ['replace'], feel: 'tight' },
   ],
   tps: [

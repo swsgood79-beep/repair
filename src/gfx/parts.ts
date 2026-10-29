@@ -349,7 +349,7 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
     case 'vu': {
       const v = fx.vu ?? [0, 0];
       const lit = glow > 0;
-      for (const [k, side] of [[0, '좌'], [1, '우']] as const) {
+      for (const [k, side] of [[0, 'L'], [1, 'R']] as const) {
         const bx = x + k * (w / 2) + 3, bw = w / 2 - 6;
         p.box(bx, y, bw, h, lit ? '#f3e2a6' : '#b8ad88', C.ink);
         for (let i = 0; i < 7; i++) { const a = -2.4 + (i / 6) * 1.5; p.rect(bx + bw / 2 + Math.cos(a) * bw * 0.4, y + h - 6 + Math.sin(a) * bw * 0.4, 2, 2, i > 4 ? C.red : '#4a3a1c'); }
@@ -469,7 +469,7 @@ function shape(p: Painter, s: Shape, x: number, y: number, w: number, h: number,
       p.box(x, y, w, h, '#1f1f1f', '#000');
       p.disc(x + 8, y + 8, 3, '#3a3a3a');
       for (let i = 0; i < 8; i++) { p.rect(x + 6 + i * (w - 12) / 7, y - 4, 3, 4, C.steel); p.rect(x + 6 + i * (w - 12) / 7, y + h, 3, 4, C.steel); }
-      p.label('칩', cx, cy - 6, 9, '#8a8a8a');
+      p.label('LSI', cx, cy - 6, 9, '#8a8a8a');
       break;
     case 'ribbon':
       p.box(x, y, w, h, '#c9a65a', '#6d5214');

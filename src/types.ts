@@ -50,7 +50,7 @@ export interface TestPoint {
   layer: Layer;
   /** volt·sig: 테스터, beat: 청진기, amp: 눈 */
   kind: 'volt' | 'sig' | 'beat' | 'amp';
-  unit: 'V' | 'mV' | 's' | '°' | '회전';
+  unit: 'V' | 'mV' | 's' | '°' | 'rpm';
   /** 할아버지 수첩의 정상값 */
   expect: number;
 }
