@@ -49,7 +49,7 @@ export function drawTitle(p: Painter, t: number) {
   const has = holder.state.history.length > 0 || holder.state.minute > 0 || holder.state.day > 1;
   p.panel(140, 310, 360, 42, C.paper);
   p.text(`할아버지의 골목 수리점. ${DEADLINE}일 안에 빚 ${won(START_DEBT)}을 갚고 본점까지 키우자.`, 320, 315, 10, C.ink, 'center', 700);
-  p.text('가게가 커질수록 밥솥·앰프·전축·재봉틀·TV·계산기까지 고칠 수 있다', 320, 332, 9, '#5b5644', 'center');
+  p.text('가게가 커질수록 밥솥·앰프·전축·재봉틀·텔레비전·계산기까지 고칠 수 있다', 320, 332, 9, '#5b5644', 'center');
   if (has) {
     button(p, 'continue', 214, 266, 100, 30, '이어하기', () => { ui.scene = holder.state.ending ? 'ending' : 'bench'; }, { kind: 'primary', size: 12 });
     button(p, 'new', 326, 266, 100, 30, '새로 시작', () => startNew(), { size: 12 });

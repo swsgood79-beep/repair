@@ -7,7 +7,7 @@ import { blank } from './util';
  */
 export const tv: ItemDef = {
   id: 'tv',
-  name: '흑백 TV',
+  name: '흑백 텔레비전',
   minDay: 14,
   fee: [45000, 60000],
   power: { on: '플러그 꽂기', off: '플러그 뽑기' },
@@ -29,7 +29,7 @@ export const tv: ItemDef = {
     { id: 'board', name: '음성 기판', short: '음성기판', shape: 'board', x: 250, y: 190, w: 160, h: 50, layer: 1, acts: ['solder'] },
   ],
   tps: [
-    { id: 't1', label: '전원부 +B', x: 180, y: 120, layer: 1, kind: 'volt', unit: 'V', expect: 110 },
+    { id: 't1', label: '전원부 직류', x: 180, y: 120, layer: 1, kind: 'volt', unit: 'V', expect: 110 },
     { id: 't2', label: '영상 신호', x: 220, y: 270, layer: 1, kind: 'sig', unit: 'V', expect: 1 },
     { id: 't3', label: '수직 구동', x: 360, y: 140, layer: 1, kind: 'sig', unit: 'V', expect: 30 },
     { id: 't4', label: '음성 출력', x: 420, y: 260, layer: 1, kind: 'sig', unit: 'V', expect: 0.5 },
@@ -48,7 +48,7 @@ export const tv: ItemDef = {
       id: 'fuse_blown', comp: 'fuse', name: '퓨즈 끊김', fix: 'replace', minDay: 14,
       complaint: '켜도 아무것도 안 나와요.',
       mark: 'soot', seen: '유리관 안이 까맣다', ohm: { v: Infinity },
-      lesson: '화면도 소리도 없다. +B 0V, 퓨즈 ∞.',
+      lesson: '화면도 소리도 없다. 전원부 직류 0V, 퓨즈 ∞.',
     },
     {
       id: 'flyback_dead', comp: 'flyback', name: '고압 트랜스 끊김', fix: 'replace', minDay: 14,
@@ -83,7 +83,7 @@ export const tv: ItemDef = {
       id: 'cord_loose', comp: 'cord', name: '코드 속 단선', fix: 'replace', minDay: 14,
       complaint: '코드를 움직이면 꺼졌다 켜졌다 해요.',
       mark: 'frayed', fine: true, seen: '피복 속 구리선이 꺾였다', ohm: { v: Infinity, flicker: true },
-      lesson: '+B부터 0V. 코드를 흔들면 살아난다.',
+      lesson: '전원부 직류부터 0V. 코드를 흔들면 살아난다.',
     },
   ],
   sim(f, c) {

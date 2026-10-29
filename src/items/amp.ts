@@ -26,13 +26,13 @@ export const amp: ItemDef = {
     { id: 'fuse', name: '퓨즈', short: '퓨즈', shape: 'fuse', x: 146, y: 60, w: 60, h: 20, layer: 1, ohm: 0, part: 500, acts: ['replace'] },
     { id: 'xfmr', name: '전원 트랜스', short: '트랜스', shape: 'xfmr', x: 146, y: 100, w: 70, h: 64, layer: 1, part: 15000, acts: ['replace'] },
     { id: 'fcap', name: '평활 콘덴서', short: '평활콘덴서', shape: 'cap', x: 232, y: 70, w: 34, h: 70, layer: 1, ohm: 'cap', part: 4000, acts: ['replace'] },
-    { id: 'trL', name: '왼쪽 출력 트랜지스터', short: '왼쪽 TR', shape: 'tr', x: 296, y: 64, w: 40, h: 50, layer: 1, ohm: 600, part: 5000, acts: ['replace'] },
-    { id: 'trR', name: '오른쪽 출력 트랜지스터', short: '오른쪽 TR', shape: 'tr', x: 440, y: 64, w: 40, h: 50, layer: 1, ohm: 600, part: 5000, acts: ['replace'] },
+    { id: 'trL', name: '왼쪽 출력 트랜지스터', short: '왼쪽 증폭기', shape: 'tr', x: 296, y: 64, w: 40, h: 50, layer: 1, ohm: 600, part: 5000, acts: ['replace'] },
+    { id: 'trR', name: '오른쪽 출력 트랜지스터', short: '오른쪽 증폭기', shape: 'tr', x: 440, y: 64, w: 40, h: 50, layer: 1, ohm: 600, part: 5000, acts: ['replace'] },
     { id: 'board', name: '출력 기판', short: '기판', shape: 'board', x: 296, y: 132, w: 184, h: 40, layer: 1, acts: ['solder'] },
     { id: 'relay', name: '보호 릴레이', short: '릴레이', shape: 'relay', x: 360, y: 68, w: 54, h: 40, layer: 1, part: 3000, acts: ['clean', 'replace'] },
   ],
   tps: [
-    { id: 't1', label: '전원부 +B', x: 274, y: 160, layer: 1, kind: 'volt', unit: 'V', expect: 35 },
+    { id: 't1', label: '전원부 직류', x: 274, y: 160, layer: 1, kind: 'volt', unit: 'V', expect: 35 },
     { id: 'tL', label: '왼쪽 출력', x: 316, y: 186, layer: 1, kind: 'sig', unit: 'V', expect: 2 },
     { id: 'tR', label: '오른쪽 출력', x: 460, y: 186, layer: 1, kind: 'sig', unit: 'V', expect: 2 },
   ],
@@ -56,10 +56,10 @@ export const amp: ItemDef = {
       lesson: '스위치를 켜도 미터 불이 꺼져 있다. 퓨즈 ∞.',
     },
     {
-      id: 'trL_dead', comp: 'trL', name: '왼쪽 출력 TR 고장', fix: 'replace', minDay: 10,
+      id: 'trL_dead', comp: 'trL', name: '왼쪽 출력 트랜지스터 고장', fix: 'replace', minDay: 10,
       complaint: '왼쪽 스피커에서만 소리가 안 나요.',
       mark: 'burnt', fine: true, seen: '방열판 주변이 누렇게 탔다', ohm: { v: 0.5 },
-      lesson: '왼쪽 출력 0V, 오른쪽은 2V. 왼쪽 TR 저항이 0.5Ω로 붙었다.',
+      lesson: '왼쪽 출력 0V, 오른쪽은 2V. 왼쪽 트랜지스터 저항이 0.5Ω로 붙었다.',
     },
     {
       id: 'spR_torn', comp: 'spR', name: '오른쪽 스피커 콘 찢어짐', fix: 'replace', minDay: 10,
@@ -77,7 +77,7 @@ export const amp: ItemDef = {
       id: 'fcap_dry', comp: 'fcap', name: '평활 콘덴서 말라붙음', fix: 'replace', minDay: 11,
       complaint: '양쪽에서 웅— 소리가 커요.',
       mark: 'bulge', seen: '머리가 부풀었다', ohm: { v: Infinity, cap: 'weak' },
-      lesson: '+B가 28V로 낮고 떨린다. 양쪽 다 웅— 하면 함께 쓰는 전원부.',
+      lesson: '전원부 직류가 28V로 낮고 떨린다. 양쪽 다 웅— 하면 함께 쓰는 전원부.',
     },
     {
       id: 'pot_dirty', comp: 'vol', name: '볼륨 오염', fix: 'clean', minDay: 10,

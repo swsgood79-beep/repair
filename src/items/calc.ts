@@ -11,13 +11,13 @@ export const calc: ItemDef = {
   minDay: 14,
   fee: [28000, 40000],
   power: { on: '전지 넣기', off: '전지 빼기' },
-  sw: ['OFF', 'ON'],
+  sw: ['끔', '켬'],
   nudge: '계산 시험',
   coverLabel: '뒷판',
   cover: [190, 40, 260, 300],
   comps: [
     { id: 'batt', name: '전지함', short: '전지', shape: 'battery', x: 60, y: 140, w: 100, h: 44, layer: 0, ohm: 0, acts: ['clean'], hand: 'power' },
-    { id: 'onkey', name: '전원 키', short: 'ON 키', shape: 'switch', x: 470, y: 90, w: 40, h: 40, layer: 0, acts: [], hand: 'switch' },
+    { id: 'onkey', name: '전원 키', short: '전원 키', shape: 'switch', x: 470, y: 90, w: 40, h: 40, layer: 0, acts: [], hand: 'switch' },
     { id: 'lcd', name: '표시창', short: '표시창', shape: 'lcd', x: 210, y: 56, w: 220, h: 70, layer: 0, part: 5000, acts: ['replace'], front: true },
     { id: 'keypad', name: '키패드', short: '키패드', shape: 'keypad', x: 210, y: 140, w: 220, h: 180, layer: 0, acts: ['clean'], feel: 'crisp', front: true },
     { id: 'chip', name: '계산 칩', short: '칩', shape: 'chip', x: 270, y: 180, w: 90, h: 60, layer: 1, part: 9000, acts: ['replace'] },
@@ -88,7 +88,7 @@ export const calc: ItemDef = {
     const text = c.nudge ? result : '0';
     if (!c.power) s.obs = '전지가 빠져 있다';
     else if (!v) s.obs = '전지를 넣었는데 아무 반응이 없다';
-    else if (c.sw === 0) s.obs = '꺼져 있다 · ON 키를 눌러 보자';
+    else if (c.sw === 0) s.obs = '꺼져 있다 · 전원 키를 눌러 보자';
     else if (!clk) s.obs = '켰는데 화면이 텅 비었다';
     else if (!drive) s.obs = '화면이 툭 꺼졌다';
     else {
