@@ -199,7 +199,7 @@ export interface Job {
   hints?: number;
 }
 
-export interface Customer { name: string; hair: string; skin: string; shirt: string; style: number; hello: string; thanks: string; angry: string }
+export interface Customer { name: string; hair: string; skin: string; shirt: string; style: number; acc?: string; hello: string; thanks: string; angry: string }
 
 export interface DaySummary { day: number; income: number; parts: number; expenses: number; returned: number; lost: number }
 

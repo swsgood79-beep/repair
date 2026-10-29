@@ -1,4 +1,5 @@
 /** 640×360 도트 캔버스와 고해상도 글자 캔버스를 겹쳐 그린다. */
+import { darken, lighten } from './art';
 export const W = 640;
 export const H = 360;
 
@@ -45,13 +46,51 @@ export class Painter {
   box(x: number, y: number, w: number, h: number, fill: string, edge = C.ink) {
     this.rect(x, y, w, h, edge);
     this.rect(x + 1, y + 1, w - 2, h - 2, fill);
+    // 큰 상자는 입체감: 위·왼쪽 밝게, 아래·오른쪽 어둡게
+    if (w >= 10 && h >= 10 && fill.length === 7 && fill.startsWith('#')) {
+      this.rect(x + 1, y + 1, w - 2, 1, lighten(fill, 0.2));
+      this.rect(x + 1, y + 2, 1, h - 3, lighten(fill, 0.1));
+      this.rect(x + 1, y + h - 2, w - 2, 1, darken(fill, 0.2));
+      this.rect(x + w - 2, y + 2, 1, h - 4, darken(fill, 0.12));
+    }
   }
-  /** 도트 판넬: 그림자 + 테두리 + 밝은 윗선 */
+  /** 모서리를 깎은 사각형 (도트 둥근 모서리) */
+  round(x: number, y: number, w: number, h: number, color: string, r = 1) {
+    this.rect(x + r, y, w - r * 2, h, color);
+    this.rect(x, y + r, w, h - r * 2, color);
+    if (r > 1) { this.rect(x + 1, y + 1, w - 2, h - 2, color); }
+  }
+  /** 도트 판넬: 그림자 + 둥근 테두리 + 입체 테 + 종이 결 */
   panel(x: number, y: number, w: number, h: number, fill: string, edge = C.ink) {
-    this.rect(x + 2, y + 2, w, h, 'rgba(0,0,0,0.35)');
-    this.box(x, y, w, h, fill, edge);
-    this.rect(x + 1, y + 1, w - 2, 1, 'rgba(255,255,255,0.18)');
-    this.clearText(x, y, w + 2, h + 2);
+    this.round(x + 2, y + 3, w, h, 'rgba(0,0,0,0.35)', 2);
+    this.round(x, y, w, h, edge, 2);
+    this.rect(x + 1, y + 1, w - 2, h - 2, fill);
+    if (fill.startsWith('#')) {
+      const hi = lighten(fill, 0.22), lo = darken(fill, 0.14);
+      this.rect(x + 2, y + 1, w - 4, 1, hi); this.rect(x + 1, y + 2, 1, h - 4, hi);
+      this.rect(x + 2, y + h - 2, w - 4, 1, lo); this.rect(x + w - 2, y + 2, 1, h - 4, lo);
+      // 종이·나무 결: 정해진 자리에 옅은 점
+      const dots = Math.floor((w * h) / 140);
+      const fleck = darken(fill, 0.07);
+      for (let i = 0; i < dots; i++) {
+        const k = (i * 7919 + x * 31 + y * 17) % 1000003;
+        this.rect(x + 3 + (k % Math.max(1, w - 6)), y + 3 + ((k / 97) | 0) % Math.max(1, h - 6), (k % 3) + 1, 1, fleck);
+      }
+    }
+    this.clearText(x, y, w + 2, h + 3);
+  }
+  /** 나무 액자 판넬: 바깥 나무 테 + 안쪽 판 */
+  frame(x: number, y: number, w: number, h: number, inner: string, wood = '#6b4529') {
+    this.round(x + 2, y + 3, w, h, 'rgba(0,0,0,0.4)', 2);
+    this.round(x, y, w, h, '#1c120b', 2);
+    this.rect(x + 1, y + 1, w - 2, h - 2, wood);
+    this.rect(x + 2, y + 1, w - 4, 1, lighten(wood, 0.25)); this.rect(x + 1, y + 2, 1, h - 4, lighten(wood, 0.15));
+    this.rect(x + 2, y + h - 2, w - 4, 1, darken(wood, 0.3)); this.rect(x + w - 2, y + 2, 1, h - 4, darken(wood, 0.25));
+    for (let i = 0; i < Math.floor(w / 18); i++) { const k = (i * 131 + y) % 97; this.rect(x + 6 + i * 18 + (k % 7), y + 2 + (k % 2), 8, 1, darken(wood, 0.12)); this.rect(x + 3 + i * 18 + (k % 5), y + h - 4, 10, 1, darken(wood, 0.12)); }
+    this.rect(x + 4, y + 4, w - 8, h - 8, '#1c120b');
+    this.rect(x + 5, y + 5, w - 10, h - 10, inner);
+    if (inner.startsWith('#')) this.rect(x + 5, y + 5, w - 10, 1, darken(inner, 0.2));
+    this.clearText(x, y, w + 2, h + 3);
   }
   line(x0: number, y0: number, x1: number, y1: number, color: string, w = 1) {
     x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);

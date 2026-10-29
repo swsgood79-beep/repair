@@ -9,40 +9,27 @@ import { setAudioPrefs, sfx } from '../audio';
 import { button, dim, holder, region, toast, ui, type Overlay } from './core';
 import type { DayReport } from '../game';
 import { drawCloseup } from '../gfx/parts';
+import { blit, outlined } from '../gfx/art';
+import { counterFront, hudBar, hudIcon, plate, shopBackdrop, titleBackdrop } from './backdrops';
 
 /* ---------- 가게 안 배경 ---------- */
 function shopRoom(p: Painter, t: number) {
-  const lv = levelOf(holder.state);
-  const unlocked = Object.keys(holder.state.unlocked ?? { lamp: 1, fan: 1 });
-  p.rect(0, 0, 640, 360, lv >= 4 ? '#55695a' : '#4c5f52');
-  for (let y = 0; y < 250; y += 12) p.rect(0, y, 640, 1, lv >= 4 ? '#4e6153' : '#46584c');
-  // 창문
-  p.box(430, 30, 180, 120, '#c9e2e0', '#2b1a0e');
-  p.rect(434, 34, 172, 112, `rgba(255,236,180,${0.35 + Math.sin(t * 0.3) * 0.05})`);
-  p.rect(519, 30, 3, 120, '#2b1a0e'); p.rect(430, 89, 180, 3, '#2b1a0e');
-  p.text(lv >= 4 ? '한결전파사 본점' : '한결전파사', 520, 52, 14, 'rgba(60,40,20,0.35)', 'center', 400, 'sign');
-  // 선반: 가게가 클수록 늘고, 고칠 수 있는 물건이 진열된다
-  const shelves = lv >= 2 ? [40, 96, 152] : [52, 112];
-  shelves.forEach((sy, k) => {
-    p.rect(30, sy + 34, 330, 6, C.wood3); p.rect(30, sy + 40, 330, 2, C.wood2);
-    for (let i = 0; i < 7; i++) drawItemIcon(p, unlocked[(i + k * 3) % unlocked.length], 40 + i * 46, sy, 1);
-  });
-  // 2층 계단, 본점 간판
-  if (lv >= 3) { p.box(374, 36, 46, 70, '#e8e0c4', '#2b1a0e'); p.text('2층', 397, 44, 12, '#2b1a0e', 'center', 400, 'sign'); p.text('공방', 397, 62, 12, '#2b1a0e', 'center', 400, 'sign'); p.text('↑', 397, 82, 12, '#2b1a0e', 'center', 700); }
-  if (lv >= 4) { p.box(444, 112, 152, 30, '#1a1a1a', C.gold); p.text('본점', 520, 117, 16, Math.sin(t * 4) > -0.6 ? '#ff7a8a' : '#7a3a4a', 'center', 400, 'sign'); }
-  // 간판
-  p.box(382, 170, 40, 54, '#e8e0c4', '#2b1a0e');
-  p.text('修', 402, 176, 18, '#2b1a0e', 'center', 400, 'sign');
-  p.text('理', 402, 198, 18, '#2b1a0e', 'center', 400, 'sign');
+  const st = holder.state;
+  shopBackdrop(p, t, levelOf(st), Object.keys(st.unlocked ?? { lamp: 1 }), st.day);
 }
 
 /** 가게 건물: 단계마다 커진다 */
 export function drawBuilding(p: Painter, x: number, y: number, lv: number, t: number, s = 1) {
+  blit(p, outlined(p, 'bld:' + lv, 132, 82, pp => buildingRaw(pp, 0, 0, lv, 0.3)), x - s, y - s, s);
+  if (lv >= 4 && Math.sin(t * 4) > -0.6) p.rect(x + 8 * s, y + 7 * s, 114 * s, 4 * s, 'rgba(255,122,138,0.6)');
+}
+function buildingRaw(p: Painter, x: number, y: number, lv: number, t: number, s = 1) {
   const R = (a: number, b: number, w: number, h: number, c: string) => p.rect(x + a * s, y + b * s, w * s, h * s, c);
   const w = [0, 70, 100, 100, 130][lv];
   const floors = lv >= 3 ? 2 : 1;
   const h = floors * 40;
-  R(0, 80 - h, w, h, '#5d4636'); R(0, 80 - h, w, 2, '#7a5d48');
+  R(0, 80 - h, w, h, '#8a5a42'); R(0, 80 - h, w, 2, '#a87458');
+  for (let yy = 80 - h + 4; yy < 80; yy += 4) for (let xx = (yy % 8) ? 0 : 3; xx < w; xx += 6) R(xx, yy, Math.min(5, w - xx), 1, '#7a4c36');
   R(4, 80 - h + 4, w - 8, 10, lv >= 4 ? '#1a1a1a' : '#2c7a73');
   if (lv >= 4) R(8, 80 - h + 7, w - 16, 4, Math.sin(t * 4) > -0.6 ? '#ff7a8a' : '#7a3a4a'); else R(8, 80 - h + 8, w - 16, 2, C.cream);
   if (floors === 2) { R(6, 80 - h + 18, w / 2 - 10, 14, '#c9e2e0'); R(w / 2 + 4, 80 - h + 18, w / 2 - 10, 14, '#c9e2e0'); }
@@ -51,39 +38,22 @@ export function drawBuilding(p: Painter, x: number, y: number, lv: number, t: nu
   if (lv >= 2) for (let i = 0; i < w; i += 8) R(i, 44, 8, 6, i % 16 ? '#e8e0c4' : '#c0392b');
 }
 
-function counterTop(p: Painter) {
-  p.rect(0, 250, 640, 110, C.wood2);
-  p.rect(0, 250, 640, 8, C.wood3);
-  p.rect(0, 258, 640, 2, '#3b2615');
-  for (let x = 0; x < 640; x += 80) p.rect(x, 262, 1, 98, '#4a311d');
-}
+function counterTop(p: Painter) { counterFront(p); }
 
 /* ---------- 제목 ---------- */
 export function drawTitle(p: Painter, t: number) {
-  p.rect(0, 0, 640, 360, '#22302a');
-  for (let i = 0; i < 40; i++) p.rect((i * 97) % 640, (i * 53) % 140, 1, 1, '#c9d6c0');
-  // 가게 정면
-  p.box(120, 70, 400, 230, '#5d4636', '#1c140e');
-  p.box(130, 82, 380, 54, '#2c7a73', C.cream);
-  p.rect(133, 85, 374, 2, '#4fa69c');
-  p.text('한결전파사', 320, 88, 34, C.cream, 'center', 400, 'sign');
-  p.text('라디오 · 선풍기 · 시계 수리', 320, 140, 11, C.cream, 'center', 700);
-  p.box(150, 160, 340, 140, '#3a2a1e', '#1c140e');
-  for (let y = 164; y < 300; y += 8) p.rect(152, y, 336, 1, '#2a1d14');
-  p.box(170, 176, 120, 80, '#c9e2e0', '#1c140e');
-  p.rect(172, 178, 116, 76, `rgba(255,210,122,${0.4 + Math.sin(t * 2) * 0.08})`);
-  drawItemIcon(p, 'radio', 188, 210, 1); drawItemIcon(p, 'clock', 236, 200, 1);
-  p.box(330, 190, 140, 110, '#6b4529', '#1c140e');
-  p.rect(398, 190, 2, 110, '#1c140e');
-  p.rect(0, 300, 640, 60, '#3a3a36');
+  titleBackdrop(p, t);
+  p.text('한결전파사', 322, 86, 36, '#123d38', 'center', 400, 'sign');
+  p.text('한결전파사', 320, 84, 36, C.cream, 'center', 400, 'sign');
+  p.text('라디오 · 텔레비전 · 시계 · 가전 수리', 320, 124, 10, '#cfe7e1', 'center', 700);
   const has = holder.state.history.length > 0 || holder.state.minute > 0 || holder.state.day > 1;
-  p.panel(150, 312, 340, 40, C.paper);
-  p.text(`할아버지의 골목 수리점. ${DEADLINE}일 안에 빚 ${won(START_DEBT)}을 갚고 본점까지 키우자.`, 320, 316, 10, C.ink, 'center', 700);
+  p.panel(140, 310, 360, 42, C.paper);
+  p.text(`할아버지의 골목 수리점. ${DEADLINE}일 안에 빚 ${won(START_DEBT)}을 갚고 본점까지 키우자.`, 320, 315, 10, C.ink, 'center', 700);
   p.text('가게가 커질수록 밥솥·앰프·전축·재봉틀·TV·계산기까지 고칠 수 있다', 320, 332, 9, '#5b5644', 'center');
   if (has) {
-    button(p, 'continue', 220, 260, 96, 28, '이어하기', () => { ui.scene = holder.state.ending ? 'ending' : 'bench'; }, { kind: 'primary', size: 12 });
-    button(p, 'new', 324, 260, 96, 28, '새로 시작', () => startNew(), { size: 12 });
-  } else button(p, 'start', 260, 260, 120, 30, '가게 문 열기', () => startNew(), { kind: 'primary', size: 13 });
+    button(p, 'continue', 214, 266, 100, 30, '이어하기', () => { ui.scene = holder.state.ending ? 'ending' : 'bench'; }, { kind: 'primary', size: 12 });
+    button(p, 'new', 326, 266, 100, 30, '새로 시작', () => startNew(), { size: 12 });
+  } else button(p, 'start', 250, 264, 140, 34, '가게 문 열기', () => startNew(), { kind: 'primary', size: 13 });
 }
 
 function startNew() {
@@ -108,11 +78,11 @@ export function drawCounter(p: Painter, t: number) {
     const cu = customerOf(job);
     const bellKey = `${job.id}`;
     if (lastBell !== bellKey) { lastBell = bellKey; sfx('doorbell'); }
-    drawCustomer(p, cu, 150, 118, job.comeback ? 'angry' : 'worried', t);
+    drawCustomer(p, { ...cu }, 110, 86, job.comeback ? 'angry' : 'worried', t);
     counterTop(p);
-    drawItemIcon(p, job.itemId, 200, 214, 2);
+    drawItemIcon(p, job.itemId, 228, 196, 2);
     p.panel(300, 168, 320, 76, C.paper);
-    p.rect(296, 196, 5, 8, C.paper);
+    for (let i = 0; i < 7; i++) p.rect(300 - i * 2, 192 + i, i * 2 + 2, 1, i === 6 ? C.ink : C.paper), p.rect(298 - i * 2, 192 + i, 1, 1, C.ink);
     p.text(cu.name, 312, 174, 11, '#5b5644', 'left', 700);
     p.text(`${cnt.i + 1} / ${cnt.ids.length}`, 610, 174, 9, '#5b5644', 'right');
     p.wrap(`“${job.complaint}”`, 312, 190, 296, 13, '#24406b', 19, 700);
@@ -129,11 +99,11 @@ export function drawCounter(p: Painter, t: number) {
   const o = cnt.outcome;
   const cu = customerOf(o.job);
   const mood = o.kind === 'paid' ? 'happy' : o.kind === 'refused' ? 'angry' : 'worried';
-  drawCustomer(p, cu, 150, 118, mood, t);
+  drawCustomer(p, { ...cu }, 110, 86, mood, t);
   counterTop(p);
-  drawItemIcon(p, o.job.itemId, 200, 214, 2);
+  drawItemIcon(p, o.job.itemId, 228, 196, 2);
   p.panel(300, 168, 320, 60, mood === 'angry' ? '#f3d2c4' : C.paper);
-  p.rect(296, 190, 5, 8, mood === 'angry' ? '#f3d2c4' : C.paper);
+  for (let i = 0; i < 7; i++) p.rect(300 - i * 2, 186 + i, i * 2 + 2, 1, mood === 'angry' ? '#f3d2c4' : C.paper), p.rect(298 - i * 2, 186 + i, 1, 1, C.ink);
   p.text(cu.name, 312, 174, 11, '#5b5644', 'left', 700);
   const line = o.kind === 'paid' ? cu.thanks : o.kind === 'refused' ? cu.angry : '할 수 없죠. 다른 데 가 볼게요.';
   p.text(`“${line}”`, 312, 194, 15, mood === 'angry' ? '#7a1a0a' : '#24406b', 'left', 700);
@@ -161,47 +131,46 @@ export function drawCounter(p: Painter, t: number) {
 export function drawEnding(p: Painter, t: number) {
   const s = holder.state;
   const kept = s.ending === 'kept';
-  p.rect(0, 0, 640, 360, kept ? '#2a3a30' : '#1c1f22');
-  p.box(170, 40, 300, 150, kept ? '#5d4636' : '#3a3a3a', '#1c140e');
-  p.box(180, 52, 280, 46, kept ? '#2c7a73' : '#555', C.cream);
-  p.text('한결전파사', 320, 56, 28, C.cream, 'center', 400, 'sign');
-  if (!kept) for (let y = 104; y < 190; y += 6) p.rect(172, y, 296, 3, '#5a5a5a');
-  else p.rect(190, 110, 260, 70, `rgba(255,210,122,${0.45 + Math.sin(t * 2) * 0.1})`);
-  p.text(kept ? '한결전파사 본점 완성!' : '셔터를 내렸다', 320, 204, 26, kept ? C.gold : C.cream, 'center', 400, 'sign');
+  titleBackdrop(p, t, !kept);
+  p.text('한결전파사', 320, 84, 36, C.cream, 'center', 400, 'sign');
+  if (!kept) {
+    // 내려진 셔터와 꺼진 불
+    p.rect(176, 186, 292, 106, '#6d6f72');
+    for (let y = 188; y < 292; y += 5) { p.rect(176, y, 292, 1, '#4d4f52'); p.rect(176, y + 1, 292, 1, '#8a8c8f'); }
+    p.rect(0, 0, 640, 360, 'rgba(10,14,30,0.45)');
+  } else for (let i = 0; i < 14; i++) { const a = t * 0.6 + i; p.rect(320 + Math.cos(a) * (120 + i * 9), 150 + Math.sin(a * 1.3) * 70, 3, 3, i % 2 ? C.glow : '#ff9a7a'); }
+  p.panel(150, 186, 340, 110, C.paper);
+  p.text(kept ? '한결전파사 본점 완성!' : '셔터를 내렸다', 320, 196, 24, kept ? '#8a5a12' : C.ink, 'center', 400, 'sign');
   const total = s.history.reduce((n, d) => n + d.returned, 0);
-  p.text(kept ? '빚을 다 갚고 본점 간판을 올렸다. “그 녀석 손이 여기 그대로구나.”' : s.money < 0 ? '금고가 바닥났다.' : `빚 ${won(s.debt)}이 남았다.`, 320, 240, 12, C.cream, 'center', 700);
-  p.text(`${s.day}일 동안 ${total}점 수리 · 도감 ${s.casebook.length}칸`, 320, 262, 11, C.sage, 'center', 700);
-  if (kept && !s.endless) button(p, 'endless', 200, 300, 116, 30, '계속 영업', () => { continueEndless(s); startDay(s); ui.counter = { kind: 'arrivals', ids: s.arrivals, i: 0 }; ui.scene = 'counter'; save(s); }, { size: 12 });
-  button(p, 'again', kept && !s.endless ? 324 : 262, 300, 116, 30, '처음부터', () => startNew(), { kind: 'primary', size: 12 });
+  p.text(kept ? '빚을 다 갚고 본점 간판을 올렸다. “그 녀석 손이 여기 그대로구나.”' : s.money < 0 ? '금고가 바닥났다.' : `빚 ${won(s.debt)}이 남았다.`, 320, 234, 11, C.ink, 'center', 700);
+  p.text(`${s.day}일 동안 ${total}점 수리 · 도감 ${s.casebook.length}칸`, 320, 254, 10, '#5b5644', 'center', 700);
+  if (kept && !s.endless) button(p, 'endless', 200, 308, 116, 30, '계속 영업', () => { continueEndless(s); startDay(s); ui.counter = { kind: 'arrivals', ids: s.arrivals, i: 0 }; ui.scene = 'counter'; save(s); }, { size: 12 });
+  button(p, 'again', kept && !s.endless ? 324 : 262, 308, 116, 30, '처음부터', () => startNew(), { kind: 'primary', size: 12 });
 }
 
 /* ---------- 머리띠 ---------- */
 export function drawHud(p: Painter) {
   const s = holder.state;
-  p.rect(0, 0, 640, 20, '#2c7a73');
-  p.rect(0, 19, 640, 1, '#1f5953');
-  p.text('한결전파사', 8, 2, 13, C.cream, 'left', 400, 'sign');
-  let x = 92;
-  const item_ = (label: string, value: string, color = C.cream) => {
-    p.text(label, x, 5, 8, '#cfe7e1', 'left', 700);
-    x += p.measure(label, 8, 700) + 4;
-    p.text(value, x, 3, 11, color, 'left', 700);
-    x += p.measure(value, 11, 700) + 12;
+  hudBar(p);
+  p.text('한결전파사', 9, 3, 13, '#1c120b', 'left', 400, 'sign');
+  p.text('한결전파사', 8, 2, 13, C.gold, 'left', 400, 'sign');
+  let x = 90;
+  const item_ = (icon: 'day' | 'time' | 'coin' | 'debt', value: string, color = C.cream) => {
+    const w = p.measure(value, 10, 700) + 22;
+    plate(p, x, 3, w, 14);
+    hudIcon(p, icon, x + 4, 5);
+    p.text(value, x + 16, 4, 10, color, 'left', 700);
+    x += w + 5;
   };
-  item_('날짜', `${s.day}일차${s.endless ? '' : '/' + DEADLINE}`);
-  item_('시각', clockText(s.minute), timeLeft(s) < 60 ? '#ffd2c4' : C.cream);
-  item_('금고', won(s.money));
-  item_('빚', won(s.debt), s.debt > 0 && DEADLINE - s.day <= 3 && !s.endless ? '#ffd2c4' : C.cream);
-  p.text('신뢰', x, 5, 8, '#cfe7e1', 'left', 700);
-  x += 22;
-  for (let i = 0; i < 10; i++) p.rect(x + i * 6, 7, 4, 6, i < s.trust ? C.glow : 'rgba(255,255,255,0.2)');
-  const bx = 530;
+  item_('day', `${s.day}일차${s.endless ? '' : ' / ' + DEADLINE}`);
+  item_('time', clockText(s.minute), timeLeft(s) < 60 ? '#ff9a7a' : C.cream);
+  item_('coin', won(s.money), C.gold);
+  item_('debt', `빚 ${won(s.debt)}`, s.debt > 0 && DEADLINE - s.day <= 3 && !s.endless ? '#ff9a7a' : C.cream);
+  const hearts = Math.ceil(s.trust / 2);
+  for (let i = 0; i < 5; i++) hudIcon(p, 'heart', x + 2 + i * 10, 6, i < hearts);
+  const bx = 524;
   const small = (id: string, label: string, onClick: () => void, idx: number) => {
-    const xx = bx + idx * 27;
-    const hov = ui.hover === id;
-    p.box(xx, 2, 25, 16, hov ? '#3f9a90' : '#1f5953', '#123d38');
-    p.text(label, xx + 12.5, 4, 9, C.cream, 'center', 700);
-    region({ id, x: xx, y: 2, w: 25, h: 16, click: () => { sfx('click', 0.4); onClick(); } });
+    button(p, id, bx + idx * 29, 1, 27, 18, label, () => onClick(), { kind: 'quiet', size: 9 });
   };
   small('hud-shop', '가게', () => { ui.overlay = { kind: 'shop' }; }, 0);
   small('hud-book', '도감', () => { ui.overlay = { kind: 'book', page: 0 }; }, 1);

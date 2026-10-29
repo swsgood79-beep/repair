@@ -2,6 +2,8 @@ import type { Action, Comp, ItemDef, Job, TestPoint, ToolId } from '../types';
 import { item } from '../items';
 import { STATIONS } from '../items/radio';
 import { C, Painter } from '../gfx/painter';
+import { darken, lighten } from '../gfx/art';
+import { benchMat, woodStrip } from './backdrops';
 import { drawCloseup, drawCustomer, drawPart, drawToolIcon } from '../gfx/parts';
 import {
   ACTION_NAME, activeJob, compOf, customerOf, events, handBack, handUse, hint, payFor, reachable, repair, repairCheck,
@@ -182,7 +184,7 @@ function drawTicket(p: Painter, job: Job | null, t: number) {
   const cu = customerOf(job);
   p.rect(6, 24, 26, 24, '#c9bf98');
   const g = p.g;
-  g.save(); g.beginPath(); g.rect(6, 24, 26, 24); g.clip(); g.translate(7, 24); g.scale(1 / 3, 1 / 3); drawCustomer(p, cu, 0, 4, 'calm', t); g.restore();
+  g.save(); g.beginPath(); g.rect(6, 24, 26, 24); g.clip(); drawCustomer(p, { ...cu }, -2, 20, 'calm', t, 1); g.restore();
   p.text(def.name, 38, 25, 11, C.ink, 'left', 700);
   p.text(cu.name, 38, 38, 9, '#5b5644', 'left', 500);
   const quote = `“${job.complaint}”`;
@@ -199,11 +201,10 @@ function drawTicket(p: Painter, job: Job | null, t: number) {
 function drawStage(p: Painter, def: ItemDef, job: Job, sim: ReturnType<typeof simulate>, status: Record<string, Status>, t: number) {
   const S = STAGE;
   updateCamera();
-  p.box(S.x, S.y, S.w, S.h, '#1b2823', C.ink);
+  p.round(S.x, S.y, S.w, S.h, C.ink, 2);
   p.g.save(); p.g.beginPath(); p.g.rect(S.x + 1, S.y + 1, S.w - 2, S.h - 2); p.g.clip();
   p.t.save(); p.t.beginPath(); p.t.rect(S.x + 1, S.y + 1, S.w - 2, S.h - 2); p.t.clip();
-  for (let x = S.x + 10; x < S.x + S.w; x += 16) p.rect(x, S.y + 1, 1, S.h - 2, '#22332b');
-  for (let y = S.y + 10; y < S.y + S.h; y += 16) p.rect(S.x + 1, y, S.w - 2, 1, '#22332b');
+  benchMat(p, S.x + 1, S.y + 1, S.w - 2, S.h - 2);
   // 작업등 불빛
   for (let i = 5; i > 0; i--) p.disc(S.x + S.w / 2, S.y + S.h / 2, 40 + i * 22, `rgba(255,214,140,0.025)`);
   decor(p, def);
@@ -232,8 +233,13 @@ function decor(p: Painter, def: ItemDef) {
   const B = (x: number, y: number, w: number, h: number, c: string, e = C.ink) => p.box(mx(x), my(y), w * K, h * K, c, e);
   switch (def.id) {
     case 'lamp':
-      for (let i = 0; i < 18; i++) R(232 - i * 2.4, 50 + i * 5.5, 176 + i * 4.8, 6, i < 2 ? '#2b524d' : '#3d6f69');
-      R(314, 190, 12, 74, C.brass); B(132, 262, 376, 86, '#4f8a80'); R(136, 266, 368, 4, '#6aa69a');
+      for (let i = 0; i < 18; i++) {
+        const x0 = 232 - i * 2.4, w0 = 176 + i * 4.8;
+        R(x0, 50 + i * 5.5, w0, 6, i < 2 ? '#2b524d' : '#3d6f69');
+        if (i >= 2) { R(x0, 50 + i * 5.5, w0 * 0.18, 6, '#4f8a80'); R(x0 + w0 * 0.82, 50 + i * 5.5, w0 * 0.18, 6, '#2f5a54'); }
+      }
+      R(190, 146, 260, 3, '#5aa096');
+      R(314, 190, 12, 74, C.brass); R(314, 190, 3, 74, '#e2c070'); R(323, 190, 3, 74, '#8a6a1f'); B(132, 262, 376, 86, '#4f8a80'); R(136, 266, 368, 4, '#6aa69a');
       break;
     case 'fan':
       R(160, 270, 14, 40, C.steel2); B(60, 300, 230, 44, '#4f8a80'); B(292, 70, 276, 178, '#4f8a80'); R(298, 76, 264, 4, '#6aa69a'); B(372, 282, 152, 52, '#3b6b63');
@@ -393,8 +399,8 @@ function drawSuspects(p: Painter, def: ItemDef, job: Job, status: Record<string,
     const can = reachable(job, c);
     const id = 's:' + c.id;
     const hov = ui.hover === id;
-    p.box(x, y, cw - 4, ch - 3, hov ? '#fff6d8' : can ? '#efe6c8' : '#bdb391', '#3a2a10');
-    p.rect(x + cw / 2 - 4, y - 1, 4, 3, C.red);
+    p.panel(x, y, cw - 4, ch - 3, hov ? '#fff6d8' : can ? '#efe6c8' : '#bdb391', '#3a2a10');
+    p.disc(x + cw / 2 - 2, y + 1, 2, C.red); p.rect(x + cw / 2 - 3, y, 1, 1, '#ffb0a0');
     p.box(x + 3, y + 3, 24, ch - 9, '#2c3a33', '#1a2621');
     p.g.save(); p.g.beginPath(); p.g.rect(x + 4, y + 4, 22, ch - 11); p.g.clip();
     drawPart(p, c, { x: x + 4, y: y + 4, w: 22, h: ch - 11 }, {}, job.ctx, 0);
@@ -476,16 +482,21 @@ function drawControls(p: Painter, def: ItemDef, job: Job) {
 /* ---------- 공구함 ---------- */
 function drawToolbar(p: Painter, job: Job | null) {
   const state = holder.state;
-  p.rect(0, 294, 640, 66, '#3a2a1c');
-  p.rect(0, 294, 640, 2, '#5b4330');
+  woodStrip(p, 294, 66);
   TOOLS.forEach((tool, i) => {
     const x = 4 + i * 58, y = 298;
     const on = ui.tool === tool.id;
     const hov = ui.hover === 'tool:' + tool.id;
-    p.box(x, y, 56, 58, on ? C.gold : hov ? '#5b4a38' : '#4a3a2a', on ? '#fff3c4' : '#24180e');
+    const face = on ? C.gold : hov ? '#6b5440' : '#5a4330';
+    p.round(x + 1, y + 2, 56, 58, 'rgba(0,0,0,0.4)', 2);
+    p.round(x, y + (on ? 2 : 0), 56, 58 - (on ? 2 : 0), '#120c08', 2);
+    p.rect(x + 1, y + 54, 54, 3, darken(face, 0.4));
+    p.rect(x + 1, y + 1 + (on ? 2 : 0), 54, 53 - (on ? 0 : 0), face);
+    p.rect(x + 2, y + 1 + (on ? 2 : 0), 52, 1, lighten(face, 0.3));
+    p.disc(x + 28, y + 19 + (on ? 2 : 0), 15, on ? lighten(face, 0.25) : darken(face, 0.18));
     const icon = tool.id === 'tester' ? 'volt' : tool.id === 'look' && state.tools.includes('loupe') ? 'loupe' : tool.id;
-    drawToolIcon(p, icon, x + 16, y + 6);
-    p.text(tool.name, x + 28, y + 33, 11, on ? C.ink : C.cream, 'center', 700);
+    drawToolIcon(p, icon, x + 16, y + 7 + (on ? 2 : 0));
+    p.text(tool.name, x + 28, y + 36 + (on ? 2 : 0), 11, on ? C.ink : C.cream, 'center', 700);
     region({ id: 'tool:' + tool.id, x, y, w: 56, h: 58, click: () => { ui.tool = tool.id; sfx('click', 0.4); } });
   });
   const hx = 298;

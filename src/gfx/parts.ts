@@ -1,5 +1,6 @@
 import type { Comp, Ctx, FX, Mark, Shape } from '../types';
 import { C, Painter } from './painter';
+import { blit, drawPortrait, outlined, type Mood } from './art';
 
 /** 부품을 화면 좌표 사각형 안에 도트로 그린다. t는 초 단위 시간 */
 export function drawPart(p: Painter, c: Comp, r: { x: number; y: number; w: number; h: number }, fx: FX, ctx: Ctx, t: number, shake = false) {
@@ -483,6 +484,9 @@ function shape_(p: Painter, s: Shape, x: number, y: number, w: number, h: number
 
 /* ---------- 작은 물건 아이콘 (선반·카운터·도감) ---------- */
 export function drawItemIcon(p: Painter, id: string, x: number, y: number, s = 1) {
+  blit(p, outlined(p, 'item:' + id, 34, 31, pp => rawItemIcon(pp, id, 0, 0)), x - s, y - s, s);
+}
+function rawItemIcon(p: Painter, id: string, x: number, y: number, s = 1) {
   const r = (a: number, b: number, w: number, h: number, c: string) => p.rect(x + a * s, y + b * s, w * s, h * s, c);
   switch (id) {
     case 'lamp':
@@ -531,6 +535,9 @@ export function drawItemIcon(p: Painter, id: string, x: number, y: number, s = 1
 
 /* ---------- 공구 아이콘 24×24 ---------- */
 export function drawToolIcon(p: Painter, id: string, x: number, y: number) {
+  blit(p, outlined(p, 'tool:' + id, 24, 24, pp => rawToolIcon(pp, id, 0, 0)), x - 1, y - 1, 1);
+}
+function rawToolIcon(p: Painter, id: string, x: number, y: number) {
   const r = (a: number, b: number, w: number, h: number, c: string) => p.rect(x + a, y + b, w, h, c);
   switch (id) {
     case 'hand': r(7, 9, 10, 11, '#e6b98f'); for (let i = 0; i < 4; i++) r(7 + i * 2.5, 3 + (i === 0 || i === 3 ? 3 : 0), 2, 7, '#e6b98f'); r(3, 11, 4, 3, '#e6b98f'); r(7, 19, 10, 1, '#b5835f'); break;
@@ -554,21 +561,7 @@ export function drawToolIcon(p: Painter, id: string, x: number, y: number) {
 }
 
 /* ---------- 손님 ---------- */
-export function drawCustomer(p: Painter, look: { hair: string; skin: string; shirt: string; style: number }, x: number, y: number, mood: 'calm' | 'happy' | 'angry' | 'worried', t: number) {
-  const bob = mood === 'angry' ? Math.round(Math.sin(t * 30)) : Math.round(Math.sin(t * 2) * 0.6);
-  const s = 3;
-  const r = (a: number, b: number, w: number, h: number, c: string) => p.rect(x + a * s, y + b * s + bob, w * s, h * s, c);
-  r(2, 17, 20, 14, look.shirt); r(2, 17, 20, 1, 'rgba(255,255,255,0.2)'); r(10, 17, 4, 3, look.skin);
-  r(5, 3, 14, 15, look.skin);
-  if (look.style === 0) { r(4, 1, 16, 4, look.hair); r(4, 2, 2, 7, look.hair); r(18, 2, 2, 7, look.hair); }
-  else if (look.style === 1) { r(4, 1, 16, 5, look.hair); r(3, 3, 3, 12, look.hair); r(18, 3, 3, 12, look.hair); }
-  else if (look.style === 2) { r(4, 0, 16, 5, look.hair); r(3, 2, 3, 16, look.hair); r(18, 2, 3, 16, look.hair); }
-  else { r(5, 1, 14, 3, look.hair); }
-  const eye = '#1d1a17';
-  if (mood === 'angry') { r(7, 8, 3, 1, eye); r(14, 8, 3, 1, eye); r(7, 9, 2, 1, eye); r(15, 9, 2, 1, eye); r(9, 14, 6, 1, '#7a2a1a'); }
-  else if (mood === 'happy') { r(7, 9, 3, 1, eye); r(14, 9, 3, 1, eye); r(9, 13, 6, 1, '#7a2a1a'); r(10, 14, 4, 1, '#7a2a1a'); r(6, 11, 2, 1, '#e89a8a'); r(16, 11, 2, 1, '#e89a8a'); }
-  else if (mood === 'worried') { r(8, 9, 2, 2, eye); r(14, 9, 2, 2, eye); r(10, 14, 4, 1, '#7a2a1a'); r(7, 7, 3, 1, eye); r(14, 7, 3, 1, eye); }
-  else { r(8, 9, 2, 2, eye); r(14, 9, 2, 2, eye); r(10, 14, 4, 1, '#7a2a1a'); }
-  if (mood === 'angry') { const ex = x + 22 * s, ey = y - 2; p.rect(ex, ey + 4, 10, 3, C.red); p.rect(ex + 3, ey, 3, 11, C.red); }
-  if (mood === 'happy') { const ex = x + 22 * s, ey = y - 4 + Math.round(Math.sin(t * 4) * 2); p.rect(ex, ey + 2, 4, 4, C.red); p.rect(ex + 5, ey + 2, 4, 4, C.red); p.rect(ex + 1, ey + 5, 7, 3, C.red); p.rect(ex + 3, ey + 8, 3, 2, C.red); }
+/** 손님 초상 (x, y 왼쪽 위, s배) */
+export function drawCustomer(p: Painter, look: { hair: string; skin: string; shirt: string; style: number; acc?: string; name?: string }, x: number, y: number, mood: Mood, t: number, s = 3) {
+  return drawPortrait(p, look, x, y, mood, t, s);
 }

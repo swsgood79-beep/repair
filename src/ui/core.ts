@@ -1,6 +1,7 @@
 import type { Action, GameState, Mark, Shape, Sound, Feel, ToolId } from '../types';
 import type { DayReport, ReturnOutcome } from '../game';
 import { C, Painter } from '../gfx/painter';
+import { darken, lighten } from '../gfx/art';
 import { sfx } from '../audio';
 
 /** 화면 위 눌리는 영역. 나중에 등록한 것이 위에 있다. */
@@ -87,20 +88,29 @@ export function toast(text: string, bad = false) {
 export function button(p: Painter, id: string, x: number, y: number, w: number, h: number, label: string, onClick: () => void, opts: { kind?: 'primary' | 'quiet' | 'danger' | 'on'; disabled?: boolean; size?: number; sub?: string; icon?: (x: number, y: number) => void } = {}) {
   const hover = ui.hover === id && !opts.disabled;
   const down = ui.pressed === id && !opts.disabled;
-  const fill = opts.disabled ? '#3a4440' : opts.kind === 'primary' ? (hover ? '#f0c470' : C.gold) : opts.kind === 'danger' ? C.red : opts.kind === 'on' ? C.gold : opts.kind === 'quiet' ? (hover ? '#33493f' : C.dark) : (hover ? '#e9e0c0' : C.paper);
+  const base = opts.disabled ? '#3d4743' : opts.kind === 'primary' || opts.kind === 'on' ? C.gold : opts.kind === 'danger' ? C.red : opts.kind === 'quiet' ? '#2f463c' : C.paper;
+  const fill = hover ? lighten(base, 0.12) : base;
   const ink = opts.disabled ? '#7d8a84' : opts.kind === 'quiet' ? C.cream : opts.kind === 'danger' ? C.white : C.ink;
-  const dy = down ? 1 : 0;
-  if (!down) p.rect(x + 1, y + h, w, 2, 'rgba(0,0,0,0.45)');
-  p.box(x, y + dy, w, h, fill);
-  p.rect(x + 1, y + 1 + dy, w - 2, 1, 'rgba(255,255,255,0.3)');
-  p.clearText(x, y, w, h + 2);
+  // 눌리면 2픽셀 내려가고 아래 두께가 사라진다
+  const dy = down ? 2 : 0;
+  p.round(x + 1, y + 3, w, h - 1, 'rgba(0,0,0,0.4)', 2);
+  p.round(x, y + dy, w, h - dy, '#120c08', 2);
+  p.rect(x + 1, y + h - 4, w - 2, 3, darken(base, 0.38));
+  p.rect(x + 1, y + 1 + dy, w - 2, h - 5 - (down ? 0 : 0) + (down ? 1 : 0), fill);
+  p.rect(x + 2, y + 1 + dy, w - 4, 1, lighten(fill, 0.35));
+  p.rect(x + 1, y + 2 + dy, 1, h - 7, lighten(fill, 0.18));
+  p.rect(x + w - 2, y + 2 + dy, 1, h - 7, darken(fill, 0.12));
+  if (opts.kind === 'on' || (opts.kind === 'primary' && !opts.disabled)) { p.rect(x + 3, y + 3 + dy, 2, 1, '#fff6d8'); }
+  p.clearText(x, y, w, h + 3);
+  const faceH = h - 4;
+  const dyT = dy - 1;
   const size = opts.size ?? 11;
   let tx = x + w / 2;
-  if (opts.icon) { opts.icon(x + 4, y + (h - 24) / 2 + dy); tx = x + 28 + (w - 28) / 2; }
+  if (opts.icon) { opts.icon(x + 4, y + (faceH - 24) / 2 + dy); tx = x + 28 + (w - 28) / 2; }
   if (opts.sub) {
-    p.text(label, tx, y + h / 2 - size + 1 + dy, size, ink, 'center', 700);
-    p.text(opts.sub, tx, y + h / 2 + 2 + dy, size - 2, ink, 'center', 500);
-  } else p.text(label, tx, y + (h - size * 1.3) / 2 + dy, size, ink, 'center', 700);
+    p.text(label, tx, y + faceH / 2 - size + 2 + dyT, size, ink, 'center', 700);
+    p.text(opts.sub, tx, y + faceH / 2 + 3 + dyT, size - 2, ink, 'center', 500);
+  } else p.text(label, tx, y + (faceH - size * 1.3) / 2 + 1 + dyT, size, ink, 'center', 700);
   region({ id, x, y, w, h, disabled: opts.disabled, click: opts.disabled ? undefined : () => { sfx('click', 0.5); onClick(); } });
 }
 
